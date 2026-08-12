@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   getSafeRedirectPath,
@@ -11,6 +11,7 @@ import styles from "../page.module.css";
 
 export default function LoginForm() {
   const router = useRouter();
+  const submittingRef = useRef(false);
   const [user, setUser] = useState({ user: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -28,86 +29,84 @@ export default function LoginForm() {
     return getSafeRedirectPath(params.get("redirect"));
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    event.stopPropagation();
+  async function doLogin(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
 
-    if (!user.user.trim() || !user.password) {
+    if (submittingRef.current || isLoading) return;
+
+    const username = user.user.trim();
+    const password = user.password;
+
+    if (!username || !password) {
       setMessage({ text: "Favor de llenar todos los campos", type: "warning" });
       return;
     }
 
-    try {
-      setIsLoading(true);
-      setMessage({ text: "", type: "" });
+    submittingRef.current = true;
+    setIsLoading(true);
+    setMessage({ text: "Validando usuario...", type: "" });
 
+    try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: user.user.trim(),
-          password: user.password,
-        }),
+        body: JSON.stringify({ username, password }),
       });
 
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
 
       if (!response.ok || !data.success) {
         setMessage({
-          text: data.error || "Credenciales inválidas",
+          text: data.error || "No se pudo iniciar sesión",
           type: "error",
         });
-        setIsLoading(false);
         return;
       }
 
-      const authData = data.data || {};
+      const authData = data.data?.auth || {};
+      const empleado = data.data?.empleado || {};
 
-      try {
-        const empleadoResponse = await fetch(
-          `/api/empleados/by-alias/${encodeURIComponent(user.user.trim())}`,
-        );
-        const empleadoData = await empleadoResponse.json();
+      localStorage.setItem("infoUser", JSON.stringify(empleado));
+      localStorage.setItem("user", JSON.stringify(authData));
+      localStorage.setItem("isAuthenticated", "true");
+      localStorage.setItem("usuario", username);
 
-        if (empleadoResponse.ok && empleadoData.success) {
-          localStorage.setItem("infoUser", JSON.stringify(empleadoData.data));
-          localStorage.setItem("user", JSON.stringify(authData));
-          localStorage.setItem("isAuthenticated", "true");
-          localStorage.setItem("usuario", user.user.trim());
+      const adminFlag =
+        authData.isAdmin === true ||
+        authData.isAdmin === "true" ||
+        authData.isAdmin === 1;
+      localStorage.setItem("isAdmin", adminFlag ? "true" : "false");
 
-          const adminFlag =
-            authData.isAdmin === true ||
-            authData.isAdmin === "true" ||
-            authData.isAdmin === 1;
-          localStorage.setItem("isAdmin", adminFlag ? "true" : "false");
+      const expiresAt = getSessionExpiresAt();
+      localStorage.setItem("sessionExpiresAt", expiresAt.toString());
+      setSessionCookieClient(expiresAt);
 
-          const expiresAt = getSessionExpiresAt();
-          localStorage.setItem("sessionExpiresAt", expiresAt.toString());
-          setSessionCookieClient(expiresAt);
-
-          setMessage({ text: "Iniciando sesión en SGO...", type: "success" });
-          setTimeout(() => router.replace(getRedirectPath()), 300);
-        } else {
-          setMessage({
-            text: "El alias del empleado no está registrado",
-            type: "error",
-          });
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error("Error al obtener información del empleado:", error);
-        setMessage({
-          text: "El alias del empleado no está registrado",
-          type: "error",
-        });
-        setIsLoading(false);
-      }
-    } catch {
+      setMessage({ text: "Iniciando sesión en SGO...", type: "success" });
+      setTimeout(() => router.replace(getRedirectPath()), 250);
+    } catch (error) {
+      console.error("Login error:", error);
       setMessage({
         text: "Error al conectar con el servidor, contacte a soporte",
         type: "error",
       });
+    } finally {
+      submittingRef.current = false;
       setIsLoading(false);
+    }
+  }
+
+  function handleKeyDown(event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void doLogin(event);
     }
   }
 
@@ -152,7 +151,15 @@ export default function LoginForm() {
 
             {message.text ? (
               <div
-                className={`${styles.alert} ${styles[`alert${message.type.charAt(0).toUpperCase()}${message.type.slice(1)}`]}`}
+                className={`${styles.alert} ${
+                  message.type === "error"
+                    ? styles.alertError
+                    : message.type === "warning"
+                      ? styles.alertWarning
+                      : message.type === "success"
+                        ? styles.alertSuccess
+                        : ""
+                }`}
                 role="alert"
               >
                 {message.text}
@@ -162,8 +169,8 @@ export default function LoginForm() {
             <form
               className={styles.form}
               method="post"
-              action="#"
-              onSubmit={handleSubmit}
+              action="/api/auth/login"
+              onSubmit={doLogin}
               noValidate
             >
               <div className={styles.field}>
@@ -175,6 +182,7 @@ export default function LoginForm() {
                   placeholder="Tu alias de Tristone"
                   value={user.user}
                   onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
                   autoComplete="username"
                   disabled={isLoading}
                   required
@@ -191,6 +199,7 @@ export default function LoginForm() {
                     placeholder="••••••••"
                     value={user.password}
                     onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
                     autoComplete="current-password"
                     disabled={isLoading}
                     required
@@ -214,7 +223,7 @@ export default function LoginForm() {
                 className={styles.submitButton}
                 disabled={isLoading}
               >
-                {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
+                {isLoading ? "Validando..." : "Iniciar sesión"}
               </button>
             </form>
 

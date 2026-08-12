@@ -986,6 +986,28 @@
   margin-bottom: 10px;
 }
 
+.docsSearchBar {
+  margin-bottom: 12px;
+}
+
+.docsSearchInput {
+  width: 100%;
+  max-width: 420px;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.docsSearchInput:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
 .tableroDocsHeader .sectionTitle {
   margin: 0;
   font-size: 14px;

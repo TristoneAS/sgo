@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   getSafeRedirectPath,
   getSessionExpiresAt,
@@ -11,7 +11,6 @@ import styles from "../page.module.css";
 
 export default function LoginForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [user, setUser] = useState({ user: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -23,20 +22,18 @@ export default function LoginForm() {
     if (message.text) setMessage({ text: "", type: "" });
   }
 
+  function getRedirectPath() {
+    if (typeof window === "undefined") return "/dashboard";
+    const params = new URLSearchParams(window.location.search);
+    return getSafeRedirectPath(params.get("redirect"));
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
+    event.stopPropagation();
 
     if (!user.user.trim() || !user.password) {
       setMessage({ text: "Favor de llenar todos los campos", type: "warning" });
-      return;
-    }
-
-    const authUrl = process.env.NEXT_PUBLIC_AUTH_SERVER_URL;
-    if (!authUrl) {
-      setMessage({
-        text: "Servidor de autenticación no configurado",
-        type: "error",
-      });
       return;
     }
 
@@ -44,67 +41,63 @@ export default function LoginForm() {
       setIsLoading(true);
       setMessage({ text: "", type: "" });
 
-      const response = await fetch(
-        `${authUrl}/SYSTEMVDOCS/AUTHENTICATE`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: user.user.trim(),
-            password: user.password,
-          }),
-        },
-      );
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: user.user.trim(),
+          password: user.password,
+        }),
+      });
 
       const data = await response.json();
 
-      if (response.ok && data.authorization !== "Unauthorized") {
-        try {
-          const empleadoResponse = await fetch(
-            `/api/empleados/by-alias/${encodeURIComponent(user.user.trim())}`,
-          );
-          const empleadoData = await empleadoResponse.json();
+      if (!response.ok || !data.success) {
+        setMessage({
+          text: data.error || "Credenciales inválidas",
+          type: "error",
+        });
+        setIsLoading(false);
+        return;
+      }
 
-          if (empleadoResponse.ok && empleadoData.success) {
-            localStorage.setItem("infoUser", JSON.stringify(empleadoData.data));
-            localStorage.setItem("user", JSON.stringify(data));
-            localStorage.setItem("isAuthenticated", "true");
-            localStorage.setItem("usuario", user.user.trim());
+      const authData = data.data || {};
 
-            const adminFlag =
-              data.isAdmin === true ||
-              data.isAdmin === "true" ||
-              data.isAdmin === 1;
-            localStorage.setItem("isAdmin", adminFlag ? "true" : "false");
+      try {
+        const empleadoResponse = await fetch(
+          `/api/empleados/by-alias/${encodeURIComponent(user.user.trim())}`,
+        );
+        const empleadoData = await empleadoResponse.json();
 
-            const expiresAt = getSessionExpiresAt();
-            localStorage.setItem("sessionExpiresAt", expiresAt.toString());
-            setSessionCookieClient(expiresAt);
+        if (empleadoResponse.ok && empleadoData.success) {
+          localStorage.setItem("infoUser", JSON.stringify(empleadoData.data));
+          localStorage.setItem("user", JSON.stringify(authData));
+          localStorage.setItem("isAuthenticated", "true");
+          localStorage.setItem("usuario", user.user.trim());
 
-            setMessage({ text: "Iniciando sesión en SGO...", type: "success" });
+          const adminFlag =
+            authData.isAdmin === true ||
+            authData.isAdmin === "true" ||
+            authData.isAdmin === 1;
+          localStorage.setItem("isAdmin", adminFlag ? "true" : "false");
 
-            const dest = getSafeRedirectPath(searchParams.get("redirect"));
-            setTimeout(() => router.replace(dest), 300);
-          } else {
-            setMessage({
-              text: "El alias del empleado no está registrado",
-              type: "error",
-            });
-            setIsLoading(false);
-          }
-        } catch (error) {
-          console.error("Error al obtener información del empleado:", error);
+          const expiresAt = getSessionExpiresAt();
+          localStorage.setItem("sessionExpiresAt", expiresAt.toString());
+          setSessionCookieClient(expiresAt);
+
+          setMessage({ text: "Iniciando sesión en SGO...", type: "success" });
+          setTimeout(() => router.replace(getRedirectPath()), 300);
+        } else {
           setMessage({
             text: "El alias del empleado no está registrado",
             type: "error",
           });
           setIsLoading(false);
         }
-      } else {
+      } catch (error) {
+        console.error("Error al obtener información del empleado:", error);
         setMessage({
-          text:
-            "Error en autenticación: " +
-            (data.message || "Credenciales inválidas"),
+          text: "El alias del empleado no está registrado",
           type: "error",
         });
         setIsLoading(false);
@@ -166,7 +159,13 @@ export default function LoginForm() {
               </div>
             ) : null}
 
-            <form className={styles.form} onSubmit={handleSubmit}>
+            <form
+              className={styles.form}
+              method="post"
+              action="#"
+              onSubmit={handleSubmit}
+              noValidate
+            >
               <div className={styles.field}>
                 <label htmlFor="user">Usuario</label>
                 <input

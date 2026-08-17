@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS formato_columnas (
   titulo VARCHAR(500) NOT NULL,
   orden INT NOT NULL DEFAULT 0,
   tipo_dato VARCHAR(50) NOT NULL DEFAULT 'texto',
+  promedio_columnas JSON NULL,
   CONSTRAINT fk_columnas_formato FOREIGN KEY (id_formato) REFERENCES formatos (id_formato) ON DELETE CASCADE,
   KEY idx_columnas_formato (id_formato, orden)
 );
@@ -26,6 +27,11 @@ CREATE TABLE IF NOT EXISTS formato_filas (
   id_fila INT AUTO_INCREMENT PRIMARY KEY,
   id_formato INT NOT NULL,
   creado_por VARCHAR(100),
+  doble_respuesta TINYINT(1) NOT NULL DEFAULT 0,
+  etiqueta_1 VARCHAR(50) NOT NULL DEFAULT 'Bud',
+  etiqueta_2 VARCHAR(50) NOT NULL DEFAULT 'Act',
+  columnas_dobles JSON NULL,
+  reglas_dobles JSON NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_filas_formato FOREIGN KEY (id_formato) REFERENCES formatos (id_formato) ON DELETE CASCADE,
   KEY idx_filas_formato (id_formato, created_at)
@@ -45,7 +51,9 @@ CREATE TABLE IF NOT EXISTS formato_reglas (
   id_regla INT AUTO_INCREMENT PRIMARY KEY,
   id_columna INT NOT NULL,
   operador ENUM('>', '>=', '<', '<=', '=', '!=', 'contiene') NOT NULL,
-  valor_comparacion VARCHAR(200) NOT NULL,
+  valor_comparacion VARCHAR(200) NOT NULL DEFAULT '',
+  tipo_fuente ENUM('valor', 'columna') NOT NULL DEFAULT 'valor',
+  id_columna_ref INT NULL,
   color_fondo VARCHAR(20) NOT NULL DEFAULT '#ef4444',
   color_texto VARCHAR(20) DEFAULT '#ffffff',
   orden INT NOT NULL DEFAULT 0,
@@ -53,10 +61,22 @@ CREATE TABLE IF NOT EXISTS formato_reglas (
   KEY idx_reglas_columna (id_columna, orden)
 );
 
+CREATE TABLE IF NOT EXISTS categorias (
+  id_categoria INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(200) NOT NULL,
+  descripcion TEXT,
+  estado ENUM('activo', 'inactivo') NOT NULL DEFAULT 'activo',
+  creado_por VARCHAR(100),
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_categorias_nombre_activo (nombre, estado)
+);
+
 CREATE TABLE IF NOT EXISTS documentos (
   id_documento INT AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(500) NOT NULL,
   descripcion TEXT,
+  id_categoria INT NULL,
   nombre_archivo VARCHAR(500) NOT NULL DEFAULT '',
   ruta_archivo VARCHAR(600) NOT NULL DEFAULT '',
   tipo_archivo VARCHAR(120),
@@ -64,5 +84,6 @@ CREATE TABLE IF NOT EXISTS documentos (
   creado_por VARCHAR(100),
   estado ENUM('activo', 'inactivo') NOT NULL DEFAULT 'activo',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_documentos_categoria FOREIGN KEY (id_categoria) REFERENCES categorias (id_categoria) ON DELETE SET NULL
 );

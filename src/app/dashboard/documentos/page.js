@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import DashboardShell from "@/app/components/DashboardShell";
 import DocumentoViewerModal from "@/app/components/DocumentoViewerModal";
 import {
@@ -18,13 +19,24 @@ function formatBytes(bytes) {
 
 export default function DocumentosPage() {
   const [documentos, setDocumentos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [idCategoria, setIdCategoria] = useState("");
   const [archivo, setArchivo] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [archivoActual, setArchivoActual] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
   const [viewerDoc, setViewerDoc] = useState(null);
+
+  const loadCategorias = useCallback(async () => {
+    const res = await fetch("/api/categorias");
+    const data = await res.json();
+    setCategorias(data.success ? data.data : []);
+  }, []);
 
   const loadDocumentos = useCallback(async () => {
     const res = await fetch("/api/documentos");
@@ -33,12 +45,45 @@ export default function DocumentosPage() {
   }, []);
 
   useEffect(() => {
-    loadDocumentos().finally(() => setLoading(false));
-  }, [loadDocumentos]);
+    Promise.all([loadDocumentos(), loadCategorias()]).finally(() =>
+      setLoading(false),
+    );
+  }, [loadDocumentos, loadCategorias]);
+
+  const documentosFiltrados = useMemo(() => {
+    if (!filtroCategoria) return documentos;
+    if (filtroCategoria === "sin") {
+      return documentos.filter((doc) => !doc.id_categoria);
+    }
+    const id = Number(filtroCategoria);
+    return documentos.filter((doc) => Number(doc.id_categoria) === id);
+  }, [documentos, filtroCategoria]);
+
+  function resetForm(formEl) {
+    setNombre("");
+    setDescripcion("");
+    setIdCategoria("");
+    setArchivo(null);
+    setEditingId(null);
+    setArchivoActual("");
+    formEl?.reset?.();
+  }
+
+  function startEdit(doc) {
+    setEditingId(doc.id_documento);
+    setNombre(doc.nombre || "");
+    setDescripcion(doc.descripcion || "");
+    setIdCategoria(doc.id_categoria ? String(doc.id_categoria) : "");
+    setArchivo(null);
+    setArchivoActual(doc.nombre_archivo || "");
+    setMessage({ text: "", type: "" });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
-    if (!archivo) {
+
+    if (!editingId && !archivo) {
       setMessage({ text: "Selecciona un archivo", type: "error" });
       return;
     }
@@ -50,23 +95,36 @@ export default function DocumentosPage() {
     formData.append("nombre", nombre);
     formData.append("descripcion", descripcion);
     formData.append("creado_por", localStorage.getItem("usuario") || "");
-    formData.append("archivo", archivo);
+    if (idCategoria) {
+      formData.append("id_categoria", idCategoria);
+    } else {
+      formData.append("id_categoria", "");
+    }
+
+    if (editingId) {
+      formData.append("id_documento", String(editingId));
+      if (archivo) {
+        formData.append("archivo", archivo);
+      }
+    } else {
+      formData.append("archivo", archivo);
+    }
 
     const res = await fetch("/api/documentos", {
-      method: "POST",
+      method: editingId ? "PUT" : "POST",
       body: formData,
     });
     const data = await res.json();
 
     if (data.success) {
-      setMessage({ text: "Documento cargado", type: "success" });
-      setNombre("");
-      setDescripcion("");
-      setArchivo(null);
-      event.target.reset?.();
+      setMessage({
+        text: editingId ? "Documento actualizado" : "Documento cargado",
+        type: "success",
+      });
+      resetForm(event.target);
       await loadDocumentos();
     } else {
-      setMessage({ text: data.error || "Error al subir", type: "error" });
+      setMessage({ text: data.error || "Error al guardar", type: "error" });
     }
 
     setSaving(false);
@@ -81,6 +139,7 @@ export default function DocumentosPage() {
     if (data.success) {
       setMessage({ text: "Documento eliminado", type: "success" });
       if (viewerDoc?.id_documento === id) setViewerDoc(null);
+      if (editingId === id) resetForm();
       loadDocumentos();
     } else {
       setMessage({ text: data.error || "Error al eliminar", type: "error" });
@@ -95,7 +154,9 @@ export default function DocumentosPage() {
       {message.text ? (
         <div
           className={`${styles.message} ${
-            message.type === "error" ? styles.messageError : styles.messageSuccess
+            message.type === "error"
+              ? styles.messageError
+              : styles.messageSuccess
           }`}
         >
           {message.text}
@@ -104,7 +165,11 @@ export default function DocumentosPage() {
 
       <div className={styles.documentosLayout}>
         <form className={styles.card} onSubmit={handleSubmit}>
-          <h2 className={styles.sectionTitle}>Nuevo documento</h2>
+          <h2 className={styles.sectionTitle}>
+            {editingId
+              ? `Editar documento #${editingId}`
+              : "Nuevo documento"}
+          </h2>
 
           <div className={styles.formGrid}>
             <div className={styles.field}>
@@ -119,6 +184,32 @@ export default function DocumentosPage() {
             </div>
 
             <div className={styles.field}>
+              <label htmlFor="doc-categoria">Categoría</label>
+              <select
+                id="doc-categoria"
+                className={styles.select}
+                value={idCategoria}
+                onChange={(e) => setIdCategoria(e.target.value)}
+              >
+                <option value="">Sin categoría</option>
+                {categorias.map((cat) => (
+                  <option key={cat.id_categoria} value={cat.id_categoria}>
+                    {cat.nombre}
+                  </option>
+                ))}
+              </select>
+              {!categorias.length ? (
+                <p className={styles.reglasHint}>
+                  No hay categorías.{" "}
+                  <Link href="/dashboard/configuracion/categorias">
+                    Créalas aquí
+                  </Link>
+                  .
+                </p>
+              ) : null}
+            </div>
+
+            <div className={styles.field}>
               <label htmlFor="doc-desc">Descripción</label>
               <textarea
                 id="doc-desc"
@@ -129,15 +220,22 @@ export default function DocumentosPage() {
             </div>
 
             <div className={styles.field}>
-              <label htmlFor="doc-file">Archivo</label>
+              <label htmlFor="doc-file">
+                {editingId ? "Reemplazar archivo (opcional)" : "Archivo"}
+              </label>
               <input
                 id="doc-file"
                 type="file"
                 accept={ACCEPT_DOCUMENTOS}
                 onChange={(e) => setArchivo(e.target.files?.[0] || null)}
-                required
+                required={!editingId}
               />
               <p className={styles.reglasHint}>{DOCUMENTOS_HINT}</p>
+              {editingId && archivoActual && !archivo ? (
+                <p className={styles.fileSelected}>
+                  Archivo actual: {archivoActual}
+                </p>
+              ) : null}
               {archivo ? (
                 <p className={styles.fileSelected}>
                   Seleccionado: {archivo.name} ({formatBytes(archivo.size)})
@@ -145,31 +243,74 @@ export default function DocumentosPage() {
               ) : null}
             </div>
 
-            <button
-              type="submit"
-              className={styles.primaryButton}
-              disabled={saving}
-            >
-              {saving ? "Subiendo..." : "Subir documento"}
-            </button>
+            <div className={styles.formActions}>
+              <button
+                type="submit"
+                className={styles.primaryButton}
+                disabled={saving}
+              >
+                {saving
+                  ? "Guardando..."
+                  : editingId
+                    ? "Actualizar documento"
+                    : "Subir documento"}
+              </button>
+              {editingId ? (
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => resetForm()}
+                  disabled={saving}
+                >
+                  Cancelar edición
+                </button>
+              ) : null}
+            </div>
           </div>
         </form>
 
         <section className={styles.card}>
-          <h2 className={styles.sectionTitle}>Documentos cargados</h2>
+          <div className={styles.docsListHeader}>
+            <h2 className={styles.sectionTitle}>Documentos cargados</h2>
+            <select
+              className={styles.select}
+              value={filtroCategoria}
+              onChange={(e) => setFiltroCategoria(e.target.value)}
+              aria-label="Filtrar por categoría"
+            >
+              <option value="">Todas las categorías</option>
+              <option value="sin">Sin categoría</option>
+              {categorias.map((cat) => (
+                <option key={cat.id_categoria} value={cat.id_categoria}>
+                  {cat.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {loading ? (
             <p>Cargando...</p>
           ) : !documentos.length ? (
             <p className={styles.reglasHint}>No hay documentos aún.</p>
+          ) : !documentosFiltrados.length ? (
+            <p className={styles.reglasHint}>
+              No hay documentos en esta categoría.
+            </p>
           ) : (
             <div className={styles.formatList}>
-              {documentos.map((doc) => (
+              {documentosFiltrados.map((doc) => (
                 <div key={doc.id_documento} className={styles.formatItem}>
                   <div>
                     <h3>
                       #{doc.id_documento} — {doc.nombre}
                     </h3>
+                    {doc.categoria_nombre ? (
+                      <span className={styles.categoriaBadge}>
+                        {doc.categoria_nombre}
+                      </span>
+                    ) : (
+                      <span className={styles.reglasHint}>Sin categoría</span>
+                    )}
                     {doc.descripcion ? <p>{doc.descripcion}</p> : null}
                     <p className={styles.reglasHint}>
                       {doc.nombre_archivo} · {formatBytes(doc.tamano_archivo)}
@@ -182,6 +323,13 @@ export default function DocumentosPage() {
                       onClick={() => setViewerDoc(doc)}
                     >
                       Ver
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.linkButton}
+                      onClick={() => startEdit(doc)}
+                    >
+                      Editar
                     </button>
                     <button
                       type="button"

@@ -1,6 +1,17 @@
 import { jsonError, jsonOk, parseId } from "@/libs/api_helpers";
+import { serializeReglasDobles } from "@/libs/conditional_rules";
 import { fetchFormatoFilas } from "@/libs/formatos_helpers";
 import { sgoDb } from "@/libs/sgo_db";
+
+function normalizeRespuestaValor(valor) {
+  if (valor && typeof valor === "object") {
+    return JSON.stringify({
+      v1: String(valor.v1 ?? ""),
+      v2: String(valor.v2 ?? ""),
+    });
+  }
+  return String(valor ?? "").trim();
+}
 
 export async function GET(_request, { params }) {
   try {
@@ -32,9 +43,16 @@ export async function POST(request, { params }) {
 
     const body = await request.json();
     const creadoPor = String(body.creado_por ?? "").trim();
-    const respuestas = body.respuestas && typeof body.respuestas === "object"
-      ? body.respuestas
-      : {};
+    const etiqueta1 = String(body.etiqueta_1 ?? "Bud").trim() || "Bud";
+    const etiqueta2 = String(body.etiqueta_2 ?? "Act").trim() || "Act";
+    const columnasDobles = Array.isArray(body.columnas_dobles)
+      ? body.columnas_dobles.map(Number).filter((n) => !Number.isNaN(n))
+      : [];
+    const reglasDoblesJson = serializeReglasDobles(body.reglas_dobles || {});
+    const respuestas =
+      body.respuestas && typeof body.respuestas === "object"
+        ? body.respuestas
+        : {};
 
     const [formatoRows] = await conn.query(
       `SELECT id_formato FROM formatos WHERE id_formato = ? AND estado = 'activo'`,
@@ -57,14 +75,25 @@ export async function POST(request, { params }) {
     await conn.beginTransaction();
 
     const [filaResult] = await conn.query(
-      `INSERT INTO formato_filas (id_formato, creado_por) VALUES (?, ?)`,
-      [idFormato, creadoPor || null],
+      `INSERT INTO formato_filas
+       (id_formato, creado_por, doble_respuesta, etiqueta_1, etiqueta_2,
+        columnas_dobles, reglas_dobles)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        idFormato,
+        creadoPor || null,
+        columnasDobles.length ? 1 : 0,
+        etiqueta1,
+        etiqueta2,
+        JSON.stringify(columnasDobles),
+        reglasDoblesJson,
+      ],
     );
 
     const idFila = filaResult.insertId;
 
     for (const columna of columnas) {
-      const valor = String(respuestas[columna.id_columna] ?? "").trim();
+      const valor = normalizeRespuestaValor(respuestas[columna.id_columna]);
       await conn.query(
         `INSERT INTO formato_celdas (id_fila, id_columna, valor) VALUES (?, ?, ?)`,
         [idFila, columna.id_columna, valor || null],
@@ -73,26 +102,10 @@ export async function POST(request, { params }) {
 
     await conn.commit();
 
-    const [filas] = await conn.query(
-      `SELECT id_fila, id_formato, creado_por, created_at FROM formato_filas WHERE id_fila = ?`,
-      [idFila],
-    );
+    const filas = await fetchFormatoFilas(idFormato, conn);
+    const fila = filas.find((f) => f.id_fila === idFila) || null;
 
-    const [celdas] = await conn.query(
-      `SELECT id_columna, valor FROM formato_celdas WHERE id_fila = ?`,
-      [idFila],
-    );
-
-    const celdasMap = {};
-    for (const celda of celdas) {
-      celdasMap[celda.id_columna] = celda.valor ?? "";
-    }
-
-    return jsonOk(
-      { ...filas[0], celdas: celdasMap },
-      "Fila registrada correctamente",
-      201,
-    );
+    return jsonOk(fila, "Fila registrada correctamente", 201);
   } catch (error) {
     await conn.rollback();
     console.error("Error al crear fila:", error);

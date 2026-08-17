@@ -463,10 +463,11 @@
   color: #1e293b;
   font: inherit;
   font-size: 13px;
+  max-width: 180px;
 }
 
 .reglaRow input {
-  width: 100px;
+  width: 110px;
 }
 
 .colorPresets {
@@ -810,6 +811,33 @@
   line-height: 1.5;
 }
 
+.editRespuestaModal {
+  width: min(860px, 100%);
+  height: auto;
+  max-height: min(92vh, 900px);
+}
+
+.editRespuestaBody {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 20px;
+}
+
+.editRespuestaFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+}
+
 @media (max-width: 720px) {
   .modalHeader {
     flex-direction: column;
@@ -987,11 +1015,21 @@
 }
 
 .docsSearchBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
   margin-bottom: 12px;
 }
 
+.docsSearchBar .select {
+  min-width: 180px;
+  max-width: 240px;
+}
+
 .docsSearchInput {
-  width: 100%;
+  flex: 1;
+  min-width: 180px;
   max-width: 420px;
   padding: 10px 12px;
   border: 1px solid #bfdbfe;
@@ -1006,6 +1044,34 @@
 .docsSearchInput:focus {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.docsListHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.docsListHeader .sectionTitle {
+  margin: 0;
+}
+
+.docsListHeader .select {
+  min-width: 200px;
+}
+
+.categoriaBadge {
+  display: inline-block;
+  margin: 4px 0 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .tableroDocsHeader .sectionTitle {
@@ -1092,3 +1158,174 @@
   font-weight: 600;
   text-transform: uppercase;
 }
+
+.preguntaItemHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.preguntaItemHeader label:first-child {
+  margin: 0;
+}
+
+.dobleCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  font-weight: 500;
+}
+
+.dobleCheck input {
+  width: 14px;
+  height: 14px;
+  accent-color: #1d4ed8;
+}
+
+.dobleLabels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dobleLabels input {
+  width: 120px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.dobleInputs {
+  display: grid;
+  gap: 8px;
+}
+
+.dobleInputRow {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.dobleLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a5f;
+  text-align: right;
+}
+
+.dobleCell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.dobleCellHalf {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 1.3;
+  border-bottom: 1px solid #e2e8f0;
+  word-break: break-word;
+}
+
+.dobleCellHalf:last-child {
+  border-bottom: none;
+}
+
+.dobleCellTag {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.filaDobleBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.reglasDobleBlock {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.reglaDobleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.reglaDobleRow select,
+.reglaDobleRow input {
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  background: #fff;
+}
+
+.reglaParHint {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e3a5f;
+  padding: 4px 8px;
+  background: #e2e8f0;
+  border-radius: 6px;
+}
+
+.promedioChecks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.promedioCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  font-weight: 500;
+}
+
+.promedioCheck input {
+  width: 14px;
+  height: 14px;
+  accent-color: #1d4ed8;
+}
+
+.ytdBadge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+

@@ -152,6 +152,9 @@ export default function DashboardShell({
                 <NavLink href="/dashboard/configuracion/formatos" icon="📋">
                   Gestionar Formatos
                 </NavLink>
+                <NavLink href="/dashboard/configuracion/categorias" icon="🏷">
+                  Categorías
+                </NavLink>
                 <NavLink href="/dashboard/llenar-formatos" icon="✎">
                   Llenar formatos
                 </NavLink>

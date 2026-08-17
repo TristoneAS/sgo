@@ -5,7 +5,45 @@ import { useParams, useRouter } from "next/navigation";
 import ColumnasConReglasEditor from "@/app/components/ColumnasConReglasEditor";
 import DashboardShell from "@/app/components/DashboardShell";
 import { emptyColumna } from "@/libs/conditional_rules";
+import { parsePromedioColumnas } from "@/libs/ytd_promedio";
 import styles from "@/app/dashboard/dashboard.module.css";
+
+function mapColumnasParaEditor(columnasApi = []) {
+  return columnasApi.map((c) => {
+    const promedioIds = parsePromedioColumnas(c.promedio_columnas);
+    const promedioIndices = promedioIds
+      .map((id) =>
+        columnasApi.findIndex((x) => Number(x.id_columna) === Number(id)),
+      )
+      .filter((idx) => idx >= 0);
+
+    return {
+      titulo: c.titulo,
+      tipo_dato: c.tipo_dato || "texto",
+      id_columna: c.id_columna,
+      promedio_columnas_indices: promedioIndices,
+      reglas: (c.reglas || []).map((r) => {
+        const tipoFuente = r.tipo_fuente || "valor";
+        let columnaRefIndex = "";
+        if (tipoFuente === "columna" && r.id_columna_ref != null) {
+          const idx = columnasApi.findIndex(
+            (x) => x.id_columna === r.id_columna_ref,
+          );
+          columnaRefIndex = idx >= 0 ? String(idx) : "";
+        }
+        return {
+          operador: r.operador,
+          tipo_fuente: tipoFuente,
+          valor_comparacion: r.valor_comparacion || "",
+          columna_ref_index: columnaRefIndex,
+          id_columna_ref: r.id_columna_ref ?? null,
+          color_fondo: r.color_fondo,
+          color_texto: r.color_texto,
+        };
+      }),
+    };
+  });
+}
 
 export default function EditarFormatoPage() {
   const params = useParams();
@@ -29,20 +67,14 @@ export default function EditarFormatoPage() {
         setDescripcion(data.data.descripcion || "");
         setColumnas(
           data.data.columnas?.length
-            ? data.data.columnas.map((c) => ({
-                titulo: c.titulo,
-                tipo_dato: c.tipo_dato || "texto",
-                reglas: (c.reglas || []).map((r) => ({
-                  operador: r.operador,
-                  valor_comparacion: r.valor_comparacion,
-                  color_fondo: r.color_fondo,
-                  color_texto: r.color_texto,
-                })),
-              }))
+            ? mapColumnasParaEditor(data.data.columnas)
             : [emptyColumna()],
         );
       } else {
-        setMessage({ text: data.error || "Formato no encontrado", type: "error" });
+        setMessage({
+          text: data.error || "Formato no encontrado",
+          type: "error",
+        });
       }
 
       setLoading(false);
@@ -66,6 +98,9 @@ export default function EditarFormatoPage() {
 
     if (data.success) {
       setMessage({ text: "Formato actualizado", type: "success" });
+      if (data.data?.columnas?.length) {
+        setColumnas(mapColumnasParaEditor(data.data.columnas));
+      }
       setSaving(false);
     } else {
       setMessage({ text: data.error || "Error al actualizar", type: "error" });
@@ -90,7 +125,9 @@ export default function EditarFormatoPage() {
         {message.text ? (
           <div
             className={`${styles.message} ${
-              message.type === "error" ? styles.messageError : styles.messageSuccess
+              message.type === "error"
+                ? styles.messageError
+                : styles.messageSuccess
             }`}
           >
             {message.text}

@@ -2,7 +2,7 @@ import { jsonError, jsonOk, parseId } from "@/libs/api_helpers";
 import { normalizeColumnasPayload } from "@/libs/conditional_rules";
 import {
   fetchFormatoCompleto,
-  insertColumnasConReglas,
+  syncColumnasConReglas,
 } from "@/libs/formatos_helpers";
 import { sgoDb } from "@/libs/sgo_db";
 
@@ -67,14 +67,10 @@ export async function PUT(request, { params }) {
       [nombre, descripcion || null, idFormato],
     );
 
-    await conn.query("DELETE FROM formato_columnas WHERE id_formato = ?", [
-      idFormato,
-    ]);
-
-    await insertColumnasConReglas(conn, idFormato, columnas);
+    await syncColumnasConReglas(conn, idFormato, columnas);
     await conn.commit();
 
-    const formato = await fetchFormatoCompleto(idFormato);
+    const formato = await fetchFormatoCompleto(idFormato, conn);
     return jsonOk(formato, "Formato actualizado correctamente");
   } catch (error) {
     await conn.rollback();

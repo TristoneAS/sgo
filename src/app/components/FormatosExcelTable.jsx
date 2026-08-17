@@ -2,11 +2,19 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { getEstiloPorReglas } from "@/libs/conditional_rules";
+import { getEstiloCeldaDoble, getEstiloPorReglas } from "@/libs/conditional_rules";
+import {
+  etiquetasDoble,
+  isValorDoble,
+  parseColumnasDobles,
+  parseDobleValor,
+  valorEscalar,
+} from "@/libs/doble_valor";
 import {
   getColumnWidth,
   getTableMinWidth,
 } from "@/libs/excel_column_styles";
+import { valorCeldaConYtd } from "@/libs/ytd_promedio";
 import styles from "@/app/dashboard/dashboard.module.css";
 
 export default function FormatosExcelTable() {
@@ -156,37 +164,103 @@ export default function FormatosExcelTable() {
                   <td className={`${styles.rowHeader} ${styles.stickyCol}`}>
                     {index + 1}
                   </td>
-                  {columnas.map((col) => {
-                    const width = getColumnWidth(col.titulo, widthOpts);
-                    const valor = fila.celdas[col.id_columna] ?? "";
-                    const reglaStyle = getEstiloPorReglas(valor, col.reglas);
-                    return (
-                      <td
-                        key={col.id_columna}
-                        className={styles.cell}
-                        style={{
-                          width,
-                          minWidth: width,
-                          maxWidth: width,
-                          ...(reglaStyle || {}),
-                        }}
-                      >
-                        <div
-                          className={styles.cellReadonly}
-                          style={
-                            reglaStyle
-                              ? {
-                                  color: reglaStyle.color,
-                                  background: "transparent",
-                                }
-                              : undefined
-                          }
+                    {columnas.map((col) => {
+                      const width = getColumnWidth(col.titulo, widthOpts);
+                      const raw = valorCeldaConYtd(col, fila.celdas || {});
+                      const labels = etiquetasDoble(fila);
+                      const dobles = new Set(
+                        parseColumnasDobles(fila.columnas_dobles),
+                      );
+                      const esDoble =
+                        (typeof raw === "object" && raw != null) ||
+                        dobles.has(Number(col.id_columna)) ||
+                        isValorDoble(raw);
+
+                      if (esDoble) {
+                        const doble = parseDobleValor(raw);
+                        const reglasFila =
+                          fila.reglas_dobles?.[Number(col.id_columna)] || [];
+                        const style1 = getEstiloCeldaDoble(
+                          "v1",
+                          doble,
+                          col.reglas,
+                          fila.celdas || {},
+                          reglasFila,
+                        );
+                        const style2 = getEstiloCeldaDoble(
+                          "v2",
+                          doble,
+                          col.reglas,
+                          fila.celdas || {},
+                          reglasFila,
+                        );
+                        return (
+                          <td
+                            key={col.id_columna}
+                            className={styles.cell}
+                            style={{
+                              width,
+                              minWidth: width,
+                              maxWidth: width,
+                            }}
+                          >
+                            <div className={styles.dobleCell}>
+                              <div
+                                className={styles.dobleCellHalf}
+                                style={style1 || undefined}
+                              >
+                                <span className={styles.dobleCellTag}>
+                                  {labels.etiqueta1}
+                                </span>
+                                {doble.v1 || "—"}
+                              </div>
+                              <div
+                                className={styles.dobleCellHalf}
+                                style={style2 || undefined}
+                              >
+                                <span className={styles.dobleCellTag}>
+                                  {labels.etiqueta2}
+                                </span>
+                                {doble.v2 || "—"}
+                              </div>
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      const valor = valorEscalar(raw);
+                      const reglaStyle = getEstiloPorReglas(
+                        valor,
+                        col.reglas,
+                        fila.celdas || {},
+                      );
+                      return (
+                        <td
+                          key={col.id_columna}
+                          className={styles.cell}
+                          style={{
+                            width,
+                            minWidth: width,
+                            maxWidth: width,
+                            ...(reglaStyle || {}),
+                          }}
                         >
-                          {valor || "—"}
-                        </div>
-                      </td>
-                    );
-                  })}
+                          <div
+                            className={styles.cellReadonly}
+                            style={
+                              reglaStyle
+                                ? {
+                                    color: reglaStyle.color,
+                                    background: "transparent",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {valor || "—"}
+                          </div>
+                        </td>
+                      );
+                    })}
                 </tr>
               ))}
             </tbody>

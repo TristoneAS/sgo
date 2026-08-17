@@ -2,8 +2,30 @@
 
 import { useCallback, useEffect, useState } from "react";
 import DashboardShell from "@/app/components/DashboardShell";
-import { getEstiloPorReglas } from "@/libs/conditional_rules";
+import PreguntasCamposEditor, {
+  makeToggleColumnaDoble,
+} from "@/app/components/PreguntasCamposEditor";
+import {
+  emptyReglaDoble,
+  getEstiloCeldaDoble,
+  getEstiloPorReglas,
+  parseReglasDobles,
+} from "@/libs/conditional_rules";
+import {
+  etiquetasDoble,
+  isValorDoble,
+  parseColumnasDobles,
+  parseDobleValor,
+  valorCeldaParaEditar,
+  valorCeldaParaGuardar,
+  valorEscalar,
+} from "@/libs/doble_valor";
 import { getColumnWidth } from "@/libs/excel_column_styles";
+import {
+  isColumnaYtd,
+  promedioYtdParaGuardar,
+  valorCeldaConYtd,
+} from "@/libs/ytd_promedio";
 import styles from "@/app/dashboard/dashboard.module.css";
 
 function emptyRespuestas(columnas) {
@@ -14,16 +36,135 @@ function emptyRespuestas(columnas) {
   return map;
 }
 
+function respuestasDesdeFila(columnas, fila) {
+  const dobles = new Set(parseColumnasDobles(fila?.columnas_dobles));
+  const map = {};
+  for (const col of columnas) {
+    const raw = fila?.celdas?.[col.id_columna];
+    const esDoble = dobles.has(Number(col.id_columna)) || isValorDoble(raw);
+    map[col.id_columna] = valorCeldaParaEditar(esDoble, raw);
+  }
+  return map;
+}
+
+function respuestasParaGuardar(columnas, respuestas, columnasDoblesSet) {
+  const map = {};
+  for (const col of columnas) {
+    if (isColumnaYtd(col.titulo)) continue;
+    const esDoble = columnasDoblesSet.has(Number(col.id_columna));
+    map[col.id_columna] = valorCeldaParaGuardar(
+      esDoble,
+      respuestas[col.id_columna],
+    );
+  }
+
+  for (const col of columnas) {
+    if (!isColumnaYtd(col.titulo)) continue;
+    map[col.id_columna] = promedioYtdParaGuardar(
+      { ...respuestas, ...map },
+      col.promedio_columnas || [],
+    );
+  }
+
+  return map;
+}
+
+function useCamposState() {
+  const [respuestas, setRespuestas] = useState({});
+  const [columnasDobles, setColumnasDobles] = useState(() => new Set());
+  const [reglasDobles, setReglasDobles] = useState({});
+  const [etiqueta1, setEtiqueta1] = useState("Bud");
+  const [etiqueta2, setEtiqueta2] = useState("Act");
+
+  function reset(columnas = []) {
+    setRespuestas(emptyRespuestas(columnas));
+    setColumnasDobles(new Set());
+    setReglasDobles({});
+    setEtiqueta1("Bud");
+    setEtiqueta2("Act");
+  }
+
+  function loadFromFila(columnas, fila) {
+    setColumnasDobles(new Set(parseColumnasDobles(fila.columnas_dobles)));
+    setReglasDobles(parseReglasDobles(fila.reglas_dobles));
+    setEtiqueta1(fila.etiqueta_1 || "Bud");
+    setEtiqueta2(fila.etiqueta_2 || "Act");
+    setRespuestas(respuestasDesdeFila(columnas, fila));
+  }
+
+  const handlers = {
+    onChange(columnaId, value) {
+      setRespuestas((prev) => ({ ...prev, [columnaId]: value }));
+    },
+    onDobleChange(columnaId, parte, value) {
+      setRespuestas((prev) => {
+        const actual = parseDobleValor(prev[columnaId]);
+        return {
+          ...prev,
+          [columnaId]: { ...actual, [parte]: value },
+        };
+      });
+    },
+    onToggleDoble: makeToggleColumnaDoble(
+      setColumnasDobles,
+      setReglasDobles,
+      setRespuestas,
+    ),
+    onAddReglaDoble(columnaId) {
+      const id = Number(columnaId);
+      setReglasDobles((prev) => ({
+        ...prev,
+        [id]: [...(prev[id] || []), emptyReglaDoble()],
+      }));
+    },
+    onUpdateReglaDoble(columnaId, reglaIndex, patch) {
+      const id = Number(columnaId);
+      setReglasDobles((prev) => ({
+        ...prev,
+        [id]: (prev[id] || []).map((regla, i) =>
+          i === reglaIndex ? { ...regla, ...patch } : regla,
+        ),
+      }));
+    },
+    onRemoveReglaDoble(columnaId, reglaIndex) {
+      const id = Number(columnaId);
+      setReglasDobles((prev) => {
+        const list = (prev[id] || []).filter((_, i) => i !== reglaIndex);
+        const next = { ...prev };
+        if (list.length) next[id] = list;
+        else delete next[id];
+        return next;
+      });
+    },
+    onEtiqueta1Change: setEtiqueta1,
+    onEtiqueta2Change: setEtiqueta2,
+  };
+
+  return {
+    respuestas,
+    columnasDobles,
+    reglasDobles,
+    etiqueta1,
+    etiqueta2,
+    reset,
+    loadFromFila,
+    handlers,
+  };
+}
+
 export default function FormatosPreguntasForm() {
   const [formatos, setFormatos] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [formato, setFormato] = useState(null);
-  const [respuestas, setRespuestas] = useState({});
-  const [editingId, setEditingId] = useState(null);
   const [vistaIndex, setVistaIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+
+  const create = useCamposState();
+  const edit = useCamposState();
 
   const loadFormatos = useCallback(async () => {
     const res = await fetch("/api/formatos");
@@ -31,49 +172,54 @@ export default function FormatosPreguntasForm() {
     setFormatos(data.success ? data.data : []);
   }, []);
 
-  const loadFormato = useCallback(async (id, options = {}) => {
-    const { resetFormulario = true, keepVista = false } = options;
+  const loadFormato = useCallback(
+    async (id, options = {}) => {
+      const { resetFormulario = true, keepVista = false } = options;
 
-    if (!id) {
-      setFormato(null);
-      setRespuestas({});
-      setEditingId(null);
-      setVistaIndex(0);
-      return null;
-    }
-
-    setLoading(true);
-    const res = await fetch(`/api/formatos/${id}`);
-    const data = await res.json();
-
-    if (data.success) {
-      const nextFormato = data.data;
-      setFormato(nextFormato);
-      if (resetFormulario) {
-        setRespuestas(emptyRespuestas(nextFormato.columnas || []));
+      if (!id) {
+        setFormato(null);
+        create.reset([]);
         setEditingId(null);
-      }
-      if (!keepVista) {
+        setEditModalOpen(false);
         setVistaIndex(0);
-      } else {
-        setVistaIndex((prev) => {
-          const total = nextFormato.filas?.length || 0;
-          if (total === 0) return 0;
-          return Math.min(prev, total - 1);
-        });
+        return null;
       }
-      setLoading(false);
-      return nextFormato;
-    }
 
-    setFormato(null);
-    setMessage({
-      text: data.error || "No se pudo cargar el formato",
-      type: "error",
-    });
-    setLoading(false);
-    return null;
-  }, []);
+      setLoading(true);
+      const res = await fetch(`/api/formatos/${id}`);
+      const data = await res.json();
+
+      if (data.success) {
+        const nextFormato = data.data;
+        setFormato(nextFormato);
+        if (resetFormulario) {
+          create.reset(nextFormato.columnas || []);
+        }
+        if (!keepVista) {
+          setVistaIndex(0);
+        } else {
+          setVistaIndex((prev) => {
+            const total = nextFormato.filas?.length || 0;
+            if (total === 0) return 0;
+            return Math.min(prev, total - 1);
+          });
+        }
+        setLoading(false);
+        return nextFormato;
+      }
+
+      setFormato(null);
+      setMessage({
+        text: data.error || "No se pudo cargar el formato",
+        type: "error",
+      });
+      setLoading(false);
+      return null;
+    },
+    // create.reset is stable enough for our usage; avoid stale closure on columnas
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   useEffect(() => {
     loadFormatos().finally(() => setLoading(false));
@@ -84,66 +230,112 @@ export default function FormatosPreguntasForm() {
     else loadFormato("");
   }, [selectedId, loadFormato]);
 
+  useEffect(() => {
+    if (!editModalOpen) return undefined;
+
+    function onKeyDown(event) {
+      if (event.key === "Escape" && !saving) closeEditModal();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [editModalOpen, saving]);
+
   function getUsuario() {
     return localStorage.getItem("usuario") || "";
   }
 
-  function handleChange(columnaId, value) {
-    setRespuestas((prev) => ({ ...prev, [columnaId]: value }));
-  }
-
-  function resetForm() {
-    if (!formato) return;
-    setRespuestas(emptyRespuestas(formato.columnas || []));
+  function closeEditModal() {
+    setEditModalOpen(false);
     setEditingId(null);
+    edit.reset(formato?.columnas || []);
   }
 
   function startEdit(fila) {
+    if (!formato) return;
     setEditingId(fila.id_fila);
-    setRespuestas({ ...(fila.celdas || {}) });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    edit.loadFromFila(formato.columnas || [], fila);
+    setEditModalOpen(true);
+    setMessage({ text: "", type: "" });
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    if (!formato) return;
+  async function saveFila({ idFila, campos, successText, closeModal }) {
+    if (!formato) return false;
 
-    const wasEditing = Boolean(editingId);
     setSaving(true);
     setMessage({ text: "", type: "" });
 
-    const url = editingId
-      ? `/api/formatos/${formato.id_formato}/filas/${editingId}`
+    const url = idFila
+      ? `/api/formatos/${formato.id_formato}/filas/${idFila}`
       : `/api/formatos/${formato.id_formato}/filas`;
 
     const res = await fetch(url, {
-      method: editingId ? "PUT" : "POST",
+      method: idFila ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         creado_por: getUsuario(),
-        respuestas,
+        etiqueta_1: campos.etiqueta1,
+        etiqueta_2: campos.etiqueta2,
+        columnas_dobles: [...campos.columnasDobles],
+        reglas_dobles: Object.fromEntries(
+          [...campos.columnasDobles].map((id) => [
+            id,
+            campos.reglasDobles[id] || [],
+          ]),
+        ),
+        respuestas: respuestasParaGuardar(
+          formato.columnas || [],
+          campos.respuestas,
+          campos.columnasDobles,
+        ),
       }),
     });
 
     const data = await res.json();
 
     if (data.success) {
-      setMessage({
-        text: wasEditing ? "Respuesta actualizada" : "Respuesta guardada",
-        type: "success",
-      });
+      setMessage({ text: successText, type: "success" });
+      if (closeModal) closeEditModal();
       const next = await loadFormato(String(formato.id_formato), {
-        resetFormulario: true,
-        keepVista: wasEditing,
+        resetFormulario: !idFila,
+        keepVista: Boolean(idFila),
       });
-      if (!wasEditing && next?.filas?.length) {
+      if (!idFila && next?.filas?.length) {
         setVistaIndex(next.filas.length - 1);
       }
-    } else {
-      setMessage({ text: data.error || "Error al guardar", type: "error" });
+      setSaving(false);
+      return true;
     }
 
+    setMessage({ text: data.error || "Error al guardar", type: "error" });
     setSaving(false);
+    return false;
+  }
+
+  async function handleCreateSubmit(event) {
+    event.preventDefault();
+    const ok = await saveFila({
+      idFila: null,
+      campos: create,
+      successText: "Guardado con éxito",
+      closeModal: false,
+    });
+    if (ok) create.reset(formato?.columnas || []);
+  }
+
+  async function handleEditSubmit(event) {
+    event.preventDefault();
+    if (!editingId) return;
+    await saveFila({
+      idFila: editingId,
+      campos: edit,
+      successText: "Guardado con éxito",
+      closeModal: true,
+    });
   }
 
   async function handleDelete(filaId) {
@@ -158,9 +350,9 @@ export default function FormatosPreguntasForm() {
 
     if (data.success) {
       setMessage({ text: "Respuesta eliminada", type: "success" });
-      if (editingId === filaId) resetForm();
+      if (editingId === filaId) closeEditModal();
       await loadFormato(String(formato.id_formato), {
-        resetFormulario: editingId === filaId,
+        resetFormulario: false,
         keepVista: true,
       });
     } else {
@@ -184,7 +376,9 @@ export default function FormatosPreguntasForm() {
       {message.text ? (
         <div
           className={`${styles.message} ${
-            message.type === "error" ? styles.messageError : styles.messageSuccess
+            message.type === "error"
+              ? styles.messageError
+              : styles.messageSuccess
           }`}
         >
           {message.text}
@@ -216,44 +410,25 @@ export default function FormatosPreguntasForm() {
         <div className={styles.emptyState}>Formato no encontrado.</div>
       ) : (
         <div className={styles.preguntasLayout}>
-          <form className={styles.preguntasForm} onSubmit={handleSubmit}>
+          <form className={styles.preguntasForm} onSubmit={handleCreateSubmit}>
             <div className={styles.preguntasFormHeader}>
               <div>
                 <h2>{formato.nombre}</h2>
                 {formato.descripcion ? <p>{formato.descripcion}</p> : null}
               </div>
-              <span className={styles.badge}>
-                {editingId ? `Editando #${editingId}` : "Nueva respuesta"}
-              </span>
+              <span className={styles.badge}>Nueva respuesta</span>
             </div>
 
-            <div className={styles.preguntasList}>
-              {columnas.map((col, index) => {
-                const valor = respuestas[col.id_columna] ?? "";
-                const reglaStyle = getEstiloPorReglas(valor, col.reglas);
-                return (
-                  <div key={col.id_columna} className={styles.preguntaItem}>
-                    <label htmlFor={`q-${col.id_columna}`}>
-                      <span className={styles.preguntaNumero}>
-                        {index + 1}.
-                      </span>{" "}
-                      {col.titulo}
-                    </label>
-                    <textarea
-                      id={`q-${col.id_columna}`}
-                      className={styles.preguntaInput}
-                      value={valor}
-                      onChange={(e) =>
-                        handleChange(col.id_columna, e.target.value)
-                      }
-                      rows={3}
-                      placeholder="Escribe tu respuesta..."
-                      style={reglaStyle || undefined}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+            <PreguntasCamposEditor
+              columnas={columnas}
+              respuestas={create.respuestas}
+              columnasDobles={create.columnasDobles}
+              reglasDobles={create.reglasDobles}
+              etiqueta1={create.etiqueta1}
+              etiqueta2={create.etiqueta2}
+              idPrefix="q"
+              {...create.handlers}
+            />
 
             <div className={styles.formActions}>
               <button
@@ -261,22 +436,8 @@ export default function FormatosPreguntasForm() {
                 className={styles.primaryButton}
                 disabled={saving}
               >
-                {saving
-                  ? "Guardando..."
-                  : editingId
-                    ? "Actualizar respuesta"
-                    : "Guardar respuesta"}
+                {saving ? "Guardando..." : "Guardar respuesta"}
               </button>
-              {editingId ? (
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={resetForm}
-                  disabled={saving}
-                >
-                  Cancelar edición
-                </button>
-              ) : null}
             </div>
           </form>
 
@@ -357,11 +518,75 @@ export default function FormatosPreguntasForm() {
                       <tr>
                         {columnas.map((col) => {
                           const width = getColumnWidth(col.titulo);
-                          const valor =
-                            filaActual.celdas?.[col.id_columna] ?? "";
+                          const raw = valorCeldaConYtd(
+                            col,
+                            filaActual.celdas || {},
+                          );
+                          const labels = etiquetasDoble(filaActual);
+                          const dobles = new Set(
+                            parseColumnasDobles(filaActual.columnas_dobles),
+                          );
+                          const esDoble =
+                            (typeof raw === "object" && raw != null) ||
+                            dobles.has(Number(col.id_columna)) ||
+                            isValorDoble(raw);
+
+                          if (esDoble) {
+                            const doble = parseDobleValor(raw);
+                            const reglasFila =
+                              filaActual.reglas_dobles?.[
+                                Number(col.id_columna)
+                              ] || [];
+                            return (
+                              <td
+                                key={col.id_columna}
+                                style={{ width, minWidth: width }}
+                              >
+                                <div className={styles.dobleCell}>
+                                  <div
+                                    className={styles.dobleCellHalf}
+                                    style={
+                                      getEstiloCeldaDoble(
+                                        "v1",
+                                        doble,
+                                        col.reglas,
+                                        filaActual.celdas || {},
+                                        reglasFila,
+                                      ) || undefined
+                                    }
+                                  >
+                                    <span className={styles.dobleCellTag}>
+                                      {labels.etiqueta1}
+                                    </span>
+                                    {doble.v1 || "—"}
+                                  </div>
+                                  <div
+                                    className={styles.dobleCellHalf}
+                                    style={
+                                      getEstiloCeldaDoble(
+                                        "v2",
+                                        doble,
+                                        col.reglas,
+                                        filaActual.celdas || {},
+                                        reglasFila,
+                                      ) || undefined
+                                    }
+                                  >
+                                    <span className={styles.dobleCellTag}>
+                                      {labels.etiqueta2}
+                                    </span>
+                                    {doble.v2 || "—"}
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          }
+
+                          const valor = valorEscalar(raw);
                           const reglaStyle = getEstiloPorReglas(
                             valor,
                             col.reglas,
+                            filaActual.celdas || {},
                           );
                           return (
                             <td
@@ -385,6 +610,75 @@ export default function FormatosPreguntasForm() {
           </section>
         </div>
       )}
+
+      {editModalOpen && formato ? (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => {
+            if (!saving) closeEditModal();
+          }}
+          role="presentation"
+        >
+          <div
+            className={`${styles.modalPanel} ${styles.editRespuestaModal}`}
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Editar respuesta #${editingId}`}
+          >
+            <header className={styles.modalHeader}>
+              <div>
+                <h2>Editar respuesta</h2>
+                <p>
+                  {formato.nombre}
+                  {editingId ? ` · #${editingId}` : ""}
+                </p>
+              </div>
+              <div className={styles.modalHeaderActions}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={closeEditModal}
+                  disabled={saving}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </header>
+
+            <form className={styles.editRespuestaBody} onSubmit={handleEditSubmit}>
+              <PreguntasCamposEditor
+                columnas={columnas}
+                respuestas={edit.respuestas}
+                columnasDobles={edit.columnasDobles}
+                reglasDobles={edit.reglasDobles}
+                etiqueta1={edit.etiqueta1}
+                etiqueta2={edit.etiqueta2}
+                idPrefix="edit-q"
+                {...edit.handlers}
+              />
+
+              <div className={styles.editRespuestaFooter}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={closeEditModal}
+                  disabled={saving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className={styles.primaryButton}
+                  disabled={saving}
+                >
+                  {saving ? "Guardando..." : "Guardar cambios"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </DashboardShell>
   );
 }

@@ -365,13 +365,18 @@ export function cumpleReglaDoble(doble, regla) {
 
   const parteEval = regla.parte_eval === "v1" ? "v1" : "v2";
   const actual = valorParteDoble(doble, parteEval);
+  // Por defecto (y "par"): compara Bud vs Act entre sí
   const esperado =
     regla.tipo_fuente === "valor"
       ? String(regla.valor_comparacion ?? "").trim()
       : valorParteDoble(doble, parteEval === "v1" ? "v2" : "v1");
 
+  if (regla.tipo_fuente !== "valor" && !esperado && !actual) {
+    return false;
+  }
+
   return cumpleRegla(actual, {
-    ...regla,
+    operador: regla.operador,
     tipo_fuente: "valor",
     valor_comparacion: esperado,
   });
@@ -401,9 +406,9 @@ export function getEstiloParteDoble(parte, doble, reglasDoble = []) {
 }
 
 /**
- * Estilo Bud/Act: no hereda reglas de columna.
- * Ambas partes empiezan sin color; solo se pinta la parte
- * indicada en la regla de la fila (parte_estilo).
+ * Estilo Bud/Act: Bud y Act se comparan entre sí con reglas_dobles.
+ * No hereda reglas de columna ni de fila (Target); ambas partes
+ * empiezan sin color y solo se pinta la parte elegida (parte_estilo).
  */
 export function getEstiloCeldaDoble(
   parte,

@@ -177,6 +177,7 @@ function useCamposState() {
         for (const col of columnasList) {
           const id = Number(col.id_columna);
           if (id === fromId) continue;
+          if (columnasDobles.has(id)) continue;
           next[id] = source.map((regla) => ({ ...regla }));
         }
         return next;

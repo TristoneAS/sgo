@@ -3,6 +3,7 @@
 import {
   COLORES_PRESET,
   columnaRequiereNumero,
+  emptyReglaDoble,
   getEstiloCelda,
   getEstiloCeldaDoble,
   OPERADORES,
@@ -309,15 +310,21 @@ export default function PreguntasCamposEditor({
                       + Agregar regla
                     </button>
                   </div>
-                  {(reglasDobles[Number(col.id_columna)] || []).length === 0 ? (
+                  {(reglasDobles[Number(col.id_columna)] ||
+                    reglasDobles[col.id_columna] ||
+                    []).length === 0 ? (
                     <p className={styles.reglasHint}>
-                      Ej: si {labelsForm.etiqueta2} &lt;{" "}
-                      {labelsForm.etiqueta1} → pintar {labelsForm.etiqueta1} de
-                      rojo.
+                      Bud y Act se comparan entre sí. Ej: si{" "}
+                      {labelsForm.etiqueta2} &lt; {labelsForm.etiqueta1} →
+                      pintar {labelsForm.etiqueta1} de rojo.
                     </p>
                   ) : (
                     <div className={styles.reglasList}>
-                      {(reglasDobles[Number(col.id_columna)] || []).map(
+                      {(
+                        reglasDobles[Number(col.id_columna)] ||
+                        reglasDobles[col.id_columna] ||
+                        []
+                      ).map(
                         (regla, reglaIndex) => {
                           const tipoFuente = regla.tipo_fuente || "par";
                           return (
@@ -375,7 +382,9 @@ export default function PreguntasCamposEditor({
                                   )
                                 }
                               >
-                                <option value="par">La otra respuesta</option>
+                                <option value="par">
+                                  Comparar entre sí
+                                </option>
                                 <option value="valor">Valor fijo</option>
                               </select>
                               {tipoFuente === "valor" ? (
@@ -577,7 +586,9 @@ export default function PreguntasCamposEditor({
                           parseDobleValor(valor),
                           col.reglas,
                           respuestas,
-                          reglasDobles[Number(col.id_columna)] || [],
+                          reglasDobles[Number(col.id_columna)] ||
+                            reglasDobles[col.id_columna] ||
+                            [],
                         ) || undefined
                       }
                     />
@@ -610,7 +621,9 @@ export default function PreguntasCamposEditor({
                           parseDobleValor(valor),
                           col.reglas,
                           respuestas,
-                          reglasDobles[Number(col.id_columna)] || [],
+                          reglasDobles[Number(col.id_columna)] ||
+                            reglasDobles[col.id_columna] ||
+                            [],
                         ) || undefined
                       }
                     />
@@ -684,6 +697,11 @@ export function makeToggleColumnaDoble(
         const next = { ...prev };
         delete next[id];
         return next;
+      });
+      // Al activar Doble: regla por defecto Bud vs Act (se comparan entre sí)
+      setReglasDobles((prev) => {
+        if ((prev[id] || []).length) return prev;
+        return { ...prev, [id]: [emptyReglaDoble()] };
       });
     } else {
       setReglasDobles((prev) => {

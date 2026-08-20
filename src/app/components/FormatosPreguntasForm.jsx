@@ -24,6 +24,7 @@ import {
 } from "@/libs/doble_valor";
 import { getColumnWidth } from "@/libs/excel_column_styles";
 import {
+  calcularPromedioYtd,
   isColumnaYtd,
   promedioYtdParaGuardar,
   valorCeldaConYtd,
@@ -118,6 +119,16 @@ function useCamposState() {
     ),
     onAddReglaDoble(columnaId) {
       const id = Number(columnaId);
+      setColumnasDobles((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+      setReglasFila((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       setReglasDobles((prev) => ({
         ...prev,
         [id]: [...(prev[id] || []), emptyReglaDoble()],
@@ -317,6 +328,32 @@ export default function FormatosPreguntasForm() {
     setSaving(true);
     setMessage({ text: "", type: "" });
 
+    const columnas = formato.columnas || [];
+    const columnasDoblesSet = new Set(
+      [...campos.columnasDobles].map(Number).filter((n) => !Number.isNaN(n)),
+    );
+
+    // YTD con promedio Bud/Act o con reglas dobles también cuenta como doble
+    for (const col of columnas) {
+      const id = Number(col.id_columna);
+      if (Number.isNaN(id)) continue;
+      const reglasD = campos.reglasDobles?.[id] || campos.reglasDobles?.[col.id_columna];
+      if (Array.isArray(reglasD) && reglasD.length) {
+        columnasDoblesSet.add(id);
+      }
+      if (isColumnaYtd(col.titulo)) {
+        const calc = calcularPromedioYtd(
+          campos.respuestas,
+          col.promedio_columnas || [],
+        );
+        if (calc && typeof calc === "object") {
+          columnasDoblesSet.add(id);
+        }
+      }
+    }
+
+    const columnasDoblesList = [...columnasDoblesSet];
+
     const url = idFila
       ? `/api/formatos/${formato.id_formato}/filas/${idFila}`
       : `/api/formatos/${formato.id_formato}/filas`;
@@ -328,22 +365,22 @@ export default function FormatosPreguntasForm() {
         creado_por: getUsuario(),
         etiqueta_1: campos.etiqueta1,
         etiqueta_2: campos.etiqueta2,
-        columnas_dobles: [...campos.columnasDobles],
+        columnas_dobles: columnasDoblesList,
         reglas_dobles: Object.fromEntries(
-          [...campos.columnasDobles].map((id) => [
+          columnasDoblesList.map((id) => [
             id,
-            campos.reglasDobles[id] || [],
+            campos.reglasDobles[id] || campos.reglasDobles[String(id)] || [],
           ]),
         ),
         reglas_fila: Object.fromEntries(
           Object.entries(campos.reglasFila || {}).filter(
-            ([id]) => !campos.columnasDobles.has(Number(id)),
+            ([id]) => !columnasDoblesSet.has(Number(id)),
           ),
         ),
         respuestas: respuestasParaGuardar(
-          formato.columnas || [],
+          columnas,
           campos.respuestas,
-          campos.columnasDobles,
+          columnasDoblesSet,
         ),
       }),
     });

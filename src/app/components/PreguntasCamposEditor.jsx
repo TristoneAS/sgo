@@ -276,25 +276,32 @@ export default function PreguntasCamposEditor({
                     <span className={styles.ytdBadge}>Solo números</span>
                   ) : null}
                 </label>
-                {!esYtd ? (
+                <div className={styles.preguntaItemHeaderRight}>
+                  {esYtd ? (
+                    <span className={styles.reglasHint}>
+                      {(col.promedio_columnas || []).length} columnas
+                    </span>
+                  ) : null}
                   <label className={styles.dobleCheck}>
                     <input
                       type="checkbox"
-                      checked={esDoble}
+                      checked={esDoble || ytdEsDoble}
+                      disabled={Boolean(ytdEsDoble)}
+                      title={
+                        ytdEsDoble
+                          ? "YTD es doble porque las columnas fuente son Bud/Act"
+                          : undefined
+                      }
                       onChange={(e) =>
                         onToggleDoble(col.id_columna, e.target.checked)
                       }
                     />
                     Doble
                   </label>
-                ) : (
-                  <span className={styles.reglasHint}>
-                    {(col.promedio_columnas || []).length} columnas
-                  </span>
-                )}
+                </div>
               </div>
 
-              {esDoble ? (
+              {esDoble || ytdEsDoble ? (
                 <div
                   className={`${styles.reglasDobleBlock} ${styles.reglasBlockUnderHeader}`}
                 >
@@ -488,7 +495,7 @@ export default function PreguntasCamposEditor({
               )}
 
               {esYtd ? (
-                ytdEsDoble ? (
+                ytdEsDoble || esDoble ? (
                   <div className={styles.dobleInputs}>
                     <div className={styles.dobleInputRow}>
                       <span className={styles.dobleLabel}>
@@ -496,14 +503,25 @@ export default function PreguntasCamposEditor({
                       </span>
                       <input
                         className={styles.preguntaInput}
-                        value={ytdCalc.v1 || ""}
+                        value={
+                          ytdEsDoble
+                            ? ytdCalc.v1 || ""
+                            : typeof ytdCalc === "string"
+                              ? ytdCalc
+                              : ""
+                        }
                         readOnly
                         style={
-                          getEstiloCelda(
-                            ytdCalc.v1,
+                          getEstiloCeldaDoble(
+                            "v1",
+                            ytdEsDoble
+                              ? ytdCalc
+                              : { v1: ytdCalc || "", v2: "" },
                             col.reglas,
                             respuestas,
-                            reglasDeFila,
+                            reglasDobles[Number(col.id_columna)] ||
+                              reglasDobles[col.id_columna] ||
+                              [],
                           ) || undefined
                         }
                       />
@@ -514,20 +532,26 @@ export default function PreguntasCamposEditor({
                       </span>
                       <input
                         className={styles.preguntaInput}
-                        value={ytdCalc.v2 || ""}
+                        value={ytdEsDoble ? ytdCalc.v2 || "" : ""}
                         readOnly
                         style={
-                          getEstiloCelda(
-                            ytdCalc.v2,
+                          getEstiloCeldaDoble(
+                            "v2",
+                            ytdEsDoble
+                              ? ytdCalc
+                              : { v1: ytdCalc || "", v2: "" },
                             col.reglas,
                             respuestas,
-                            reglasDeFila,
+                            reglasDobles[Number(col.id_columna)] ||
+                              reglasDobles[col.id_columna] ||
+                              [],
                           ) || undefined
                         }
                       />
                     </div>
                     <p className={styles.reglasHint}>
-                      Se calcula solo; no se edita manualmente.
+                      Se calcula solo; no se edita manualmente. Puedes agregar
+                      reglas Bud/Act arriba.
                     </p>
                   </div>
                 ) : (

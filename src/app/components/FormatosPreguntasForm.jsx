@@ -177,7 +177,6 @@ function useCamposState() {
         for (const col of columnasList) {
           const id = Number(col.id_columna);
           if (id === fromId) continue;
-          if (isColumnaYtd(col.titulo)) continue;
           next[id] = source.map((regla) => ({ ...regla }));
         }
         return next;

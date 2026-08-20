@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS formato_filas (
   etiqueta_2 VARCHAR(50) NOT NULL DEFAULT 'Act',
   columnas_dobles JSON NULL,
   reglas_dobles JSON NULL,
+  reglas_fila JSON NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_filas_formato FOREIGN KEY (id_formato) REFERENCES formatos (id_formato) ON DELETE CASCADE,
   KEY idx_filas_formato (id_formato, created_at)

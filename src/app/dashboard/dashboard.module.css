@@ -404,6 +404,16 @@
   border-top: 1px dashed #cbd5e1;
 }
 
+.reglasBlockUnderHeader {
+  margin-top: 0;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px dashed #cbd5e1;
+  border-top: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
 .reglasHeader {
   display: flex;
   justify-content: space-between;

@@ -23,17 +23,19 @@ function ReglasFilaEditor({
   columnaId,
   columnas,
   reglas,
+  tituloColumna,
   onAdd,
   onUpdate,
   onRemove,
   onCopyATodas,
 }) {
   const list = reglas || [];
+  const titulo = tituloColumna?.trim() || "esta columna";
 
   return (
-    <div className={styles.reglasBlock}>
+    <div className={`${styles.reglasBlock} ${styles.reglasBlockUnderHeader}`}>
       <div className={styles.reglasHeader}>
-        <span>Reglas de color (esta fila)</span>
+        <span>Reglas de color · {titulo}</span>
         <div className={styles.reglasHeaderActions}>
           {list.length > 0 && onCopyATodas ? (
             <button
@@ -50,15 +52,15 @@ function ReglasFilaEditor({
             className={styles.addReglaButton}
             onClick={() => onAdd(columnaId)}
           >
-            + Regla
+            + Agregar regla
           </button>
         </div>
       </div>
 
       {list.length === 0 ? (
         <p className={styles.reglasHint}>
-          Ej: si valor &gt; Target → rojo (o verde). Aplica solo a esta
-          métrica/fila.
+          Ej: si valor &gt; Target → rojo (o verde). Solo para “{titulo}” en
+          esta fila.
         </p>
       ) : (
         <div className={styles.reglasList}>
@@ -291,6 +293,191 @@ export default function PreguntasCamposEditor({
                 )}
               </div>
 
+              {esDoble ? (
+                <div
+                  className={`${styles.reglasDobleBlock} ${styles.reglasBlockUnderHeader}`}
+                >
+                  <div className={styles.reglasHeader}>
+                    <span>
+                      Reglas Bud/Act · {col.titulo?.trim() || "columna"}
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.addReglaButton}
+                      onClick={() => onAddReglaDoble(col.id_columna)}
+                    >
+                      + Agregar regla
+                    </button>
+                  </div>
+                  {(reglasDobles[Number(col.id_columna)] || []).length === 0 ? (
+                    <p className={styles.reglasHint}>
+                      Ej: si {labelsForm.etiqueta2} &lt;{" "}
+                      {labelsForm.etiqueta1} → pintar {labelsForm.etiqueta1} de
+                      rojo.
+                    </p>
+                  ) : (
+                    <div className={styles.reglasList}>
+                      {(reglasDobles[Number(col.id_columna)] || []).map(
+                        (regla, reglaIndex) => {
+                          const tipoFuente = regla.tipo_fuente || "par";
+                          return (
+                            <div
+                              key={reglaIndex}
+                              className={styles.reglaDobleRow}
+                            >
+                              <span className={styles.reglaSi}>Si</span>
+                              <select
+                                value={regla.parte_eval || "v2"}
+                                onChange={(e) =>
+                                  onUpdateReglaDoble(
+                                    col.id_columna,
+                                    reglaIndex,
+                                    { parte_eval: e.target.value },
+                                  )
+                                }
+                              >
+                                <option value="v1">
+                                  {labelsForm.etiqueta1}
+                                </option>
+                                <option value="v2">
+                                  {labelsForm.etiqueta2}
+                                </option>
+                              </select>
+                              <select
+                                value={regla.operador}
+                                onChange={(e) =>
+                                  onUpdateReglaDoble(
+                                    col.id_columna,
+                                    reglaIndex,
+                                    { operador: e.target.value },
+                                  )
+                                }
+                              >
+                                {OPERADORES.map((op) => (
+                                  <option key={op.value} value={op.value}>
+                                    {op.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                value={tipoFuente}
+                                onChange={(e) =>
+                                  onUpdateReglaDoble(
+                                    col.id_columna,
+                                    reglaIndex,
+                                    {
+                                      tipo_fuente: e.target.value,
+                                      valor_comparacion:
+                                        e.target.value === "valor"
+                                          ? regla.valor_comparacion || ""
+                                          : "",
+                                    },
+                                  )
+                                }
+                              >
+                                <option value="par">La otra respuesta</option>
+                                <option value="valor">Valor fijo</option>
+                              </select>
+                              {tipoFuente === "valor" ? (
+                                <input
+                                  value={regla.valor_comparacion || ""}
+                                  onChange={(e) =>
+                                    onUpdateReglaDoble(
+                                      col.id_columna,
+                                      reglaIndex,
+                                      {
+                                        valor_comparacion: e.target.value,
+                                      },
+                                    )
+                                  }
+                                  placeholder="Valor"
+                                />
+                              ) : (
+                                <span className={styles.reglaParHint}>
+                                  {(regla.parte_eval || "v2") === "v1"
+                                    ? labelsForm.etiqueta2
+                                    : labelsForm.etiqueta1}
+                                </span>
+                              )}
+                              <span className={styles.reglaSi}>→</span>
+                              <select
+                                value={regla.parte_estilo || "v1"}
+                                onChange={(e) =>
+                                  onUpdateReglaDoble(
+                                    col.id_columna,
+                                    reglaIndex,
+                                    { parte_estilo: e.target.value },
+                                  )
+                                }
+                                title="Pintar"
+                              >
+                                <option value="v1">
+                                  Pintar {labelsForm.etiqueta1}
+                                </option>
+                                <option value="v2">
+                                  Pintar {labelsForm.etiqueta2}
+                                </option>
+                                <option value="ambos">Pintar ambas</option>
+                              </select>
+                              <div className={styles.colorPresets}>
+                                {COLORES_PRESET.map((preset) => (
+                                  <button
+                                    key={preset.fondo}
+                                    type="button"
+                                    title={preset.label}
+                                    className={styles.colorSwatch}
+                                    style={{ background: preset.fondo }}
+                                    onClick={() =>
+                                      onUpdateReglaDoble(
+                                        col.id_columna,
+                                        reglaIndex,
+                                        {
+                                          color_fondo: preset.fondo,
+                                          color_texto: preset.texto,
+                                        },
+                                      )
+                                    }
+                                  />
+                                ))}
+                              </div>
+                              <span
+                                className={styles.colorPreview}
+                                style={{
+                                  background: regla.color_fondo,
+                                  color: regla.color_texto,
+                                }}
+                              >
+                                Aa
+                              </span>
+                              <button
+                                type="button"
+                                className={styles.removeButton}
+                                onClick={() =>
+                                  onRemoveReglaDoble(col.id_columna, reglaIndex)
+                                }
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        },
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <ReglasFilaEditor
+                  columnaId={col.id_columna}
+                  columnas={columnas}
+                  reglas={reglasDeFila}
+                  tituloColumna={col.titulo}
+                  onAdd={onAddReglaFila}
+                  onUpdate={onUpdateReglaFila}
+                  onRemove={onRemoveReglaFila}
+                  onCopyATodas={onCopyReglasFilaATodas}
+                />
+              )}
+
               {esYtd ? (
                 ytdEsDoble ? (
                   <div className={styles.dobleInputs}>
@@ -428,232 +615,46 @@ export default function PreguntasCamposEditor({
                       }
                     />
                   </div>
-
-                  <div className={styles.reglasDobleBlock}>
-                    <div className={styles.reglasHeader}>
-                      <span>Reglas de color Bud/Act</span>
-                      <button
-                        type="button"
-                        className={styles.addReglaButton}
-                        onClick={() => onAddReglaDoble(col.id_columna)}
-                      >
-                        + Regla
-                      </button>
-                    </div>
-                    {(reglasDobles[Number(col.id_columna)] || []).length ===
-                    0 ? (
-                      <p className={styles.reglasHint}>
-                        Ej: si {labelsForm.etiqueta2} &lt;{" "}
-                        {labelsForm.etiqueta1} → pintar {labelsForm.etiqueta1}{" "}
-                        de rojo.
-                      </p>
-                    ) : (
-                      <div className={styles.reglasList}>
-                        {(reglasDobles[Number(col.id_columna)] || []).map(
-                          (regla, reglaIndex) => {
-                            const tipoFuente = regla.tipo_fuente || "par";
-                            return (
-                              <div
-                                key={reglaIndex}
-                                className={styles.reglaDobleRow}
-                              >
-                                <span className={styles.reglaSi}>Si</span>
-                                <select
-                                  value={regla.parte_eval || "v2"}
-                                  onChange={(e) =>
-                                    onUpdateReglaDoble(
-                                      col.id_columna,
-                                      reglaIndex,
-                                      { parte_eval: e.target.value },
-                                    )
-                                  }
-                                >
-                                  <option value="v1">
-                                    {labelsForm.etiqueta1}
-                                  </option>
-                                  <option value="v2">
-                                    {labelsForm.etiqueta2}
-                                  </option>
-                                </select>
-                                <select
-                                  value={regla.operador}
-                                  onChange={(e) =>
-                                    onUpdateReglaDoble(
-                                      col.id_columna,
-                                      reglaIndex,
-                                      { operador: e.target.value },
-                                    )
-                                  }
-                                >
-                                  {OPERADORES.map((op) => (
-                                    <option key={op.value} value={op.value}>
-                                      {op.label}
-                                    </option>
-                                  ))}
-                                </select>
-                                <select
-                                  value={tipoFuente}
-                                  onChange={(e) =>
-                                    onUpdateReglaDoble(
-                                      col.id_columna,
-                                      reglaIndex,
-                                      {
-                                        tipo_fuente: e.target.value,
-                                        valor_comparacion:
-                                          e.target.value === "valor"
-                                            ? regla.valor_comparacion || ""
-                                            : "",
-                                      },
-                                    )
-                                  }
-                                >
-                                  <option value="par">La otra respuesta</option>
-                                  <option value="valor">Valor fijo</option>
-                                </select>
-                                {tipoFuente === "valor" ? (
-                                  <input
-                                    value={regla.valor_comparacion || ""}
-                                    onChange={(e) =>
-                                      onUpdateReglaDoble(
-                                        col.id_columna,
-                                        reglaIndex,
-                                        {
-                                          valor_comparacion: e.target.value,
-                                        },
-                                      )
-                                    }
-                                    placeholder="Valor"
-                                  />
-                                ) : (
-                                  <span className={styles.reglaParHint}>
-                                    {(regla.parte_eval || "v2") === "v1"
-                                      ? labelsForm.etiqueta2
-                                      : labelsForm.etiqueta1}
-                                  </span>
-                                )}
-                                <span className={styles.reglaSi}>→</span>
-                                <select
-                                  value={regla.parte_estilo || "v1"}
-                                  onChange={(e) =>
-                                    onUpdateReglaDoble(
-                                      col.id_columna,
-                                      reglaIndex,
-                                      { parte_estilo: e.target.value },
-                                    )
-                                  }
-                                  title="Pintar"
-                                >
-                                  <option value="v1">
-                                    Pintar {labelsForm.etiqueta1}
-                                  </option>
-                                  <option value="v2">
-                                    Pintar {labelsForm.etiqueta2}
-                                  </option>
-                                  <option value="ambos">Pintar ambas</option>
-                                </select>
-                                <div className={styles.colorPresets}>
-                                  {COLORES_PRESET.map((preset) => (
-                                    <button
-                                      key={preset.fondo}
-                                      type="button"
-                                      title={preset.label}
-                                      className={styles.colorSwatch}
-                                      style={{ background: preset.fondo }}
-                                      onClick={() =>
-                                        onUpdateReglaDoble(
-                                          col.id_columna,
-                                          reglaIndex,
-                                          {
-                                            color_fondo: preset.fondo,
-                                            color_texto: preset.texto,
-                                          },
-                                        )
-                                      }
-                                    />
-                                  ))}
-                                </div>
-                                <span
-                                  className={styles.colorPreview}
-                                  style={{
-                                    background: regla.color_fondo,
-                                    color: regla.color_texto,
-                                  }}
-                                >
-                                  Aa
-                                </span>
-                                <button
-                                  type="button"
-                                  className={styles.removeButton}
-                                  onClick={() =>
-                                    onRemoveReglaDoble(
-                                      col.id_columna,
-                                      reglaIndex,
-                                    )
-                                  }
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            );
-                          },
-                        )}
-                      </div>
-                    )}
-                  </div>
                 </div>
+              ) : esNumero ? (
+                <input
+                  id={`${idPrefix}-${col.id_columna}`}
+                  className={styles.preguntaInput}
+                  type="text"
+                  inputMode="decimal"
+                  value={valor ?? ""}
+                  onChange={(e) =>
+                    handleValorChange(col.id_columna, e.target.value, true)
+                  }
+                  placeholder="Solo números..."
+                  style={
+                    getEstiloCelda(
+                      valor ?? "",
+                      col.reglas,
+                      respuestas,
+                      reglasDeFila,
+                    ) || undefined
+                  }
+                />
               ) : (
-                <>
-                  {esNumero ? (
-                    <input
-                      id={`${idPrefix}-${col.id_columna}`}
-                      className={styles.preguntaInput}
-                      type="text"
-                      inputMode="decimal"
-                      value={valor ?? ""}
-                      onChange={(e) =>
-                        handleValorChange(col.id_columna, e.target.value, true)
-                      }
-                      placeholder="Solo números..."
-                      style={
-                        getEstiloCelda(
-                          valor ?? "",
-                          col.reglas,
-                          respuestas,
-                          reglasDeFila,
-                        ) || undefined
-                      }
-                    />
-                  ) : (
-                    <textarea
-                      id={`${idPrefix}-${col.id_columna}`}
-                      className={styles.preguntaInput}
-                      value={valor ?? ""}
-                      onChange={(e) =>
-                        handleValorChange(col.id_columna, e.target.value, false)
-                      }
-                      rows={3}
-                      placeholder="Escribe tu respuesta..."
-                      style={
-                        getEstiloCelda(
-                          valor ?? "",
-                          col.reglas,
-                          respuestas,
-                          reglasDeFila,
-                        ) || undefined
-                      }
-                    />
-                  )}
-
-                  <ReglasFilaEditor
-                    columnaId={col.id_columna}
-                    columnas={columnas}
-                    reglas={reglasDeFila}
-                    onAdd={onAddReglaFila}
-                    onUpdate={onUpdateReglaFila}
-                    onRemove={onRemoveReglaFila}
-                    onCopyATodas={onCopyReglasFilaATodas}
-                  />
-                </>
+                <textarea
+                  id={`${idPrefix}-${col.id_columna}`}
+                  className={styles.preguntaInput}
+                  value={valor ?? ""}
+                  onChange={(e) =>
+                    handleValorChange(col.id_columna, e.target.value, false)
+                  }
+                  rows={3}
+                  placeholder="Escribe tu respuesta..."
+                  style={
+                    getEstiloCelda(
+                      valor ?? "",
+                      col.reglas,
+                      respuestas,
+                      reglasDeFila,
+                    ) || undefined
+                  }
+                />
               )}
             </div>
           );

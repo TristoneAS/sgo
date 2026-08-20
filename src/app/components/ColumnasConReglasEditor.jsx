@@ -99,13 +99,6 @@ export default function ColumnasConReglasEditor({ columnas, onChange }) {
     <div>
       <div className={styles.columnasHeader}>
         <label className={styles.sectionLabel}>Columnas y reglas</label>
-        <button
-          type="button"
-          className={styles.secondaryButton}
-          onClick={addColumna}
-        >
-          + Agregar columna
-        </button>
       </div>
 
       <div className={styles.formGrid}>
@@ -336,6 +329,14 @@ export default function ColumnasConReglasEditor({ columnas, onChange }) {
           );
         })}
       </div>
+
+      <button
+        type="button"
+        className={styles.secondaryButton}
+        onClick={addColumna}
+      >
+        + Agregar columna
+      </button>
     </div>
   );
 }

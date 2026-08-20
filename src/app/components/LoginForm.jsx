@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   getSafeRedirectPath,
@@ -9,6 +9,17 @@ import {
 } from "@/libs/auth_session";
 import styles from "../page.module.css";
 
+const ERROR_MESSAGES = {
+  campos: "Favor de llenar todos los campos",
+  config: "Servidor de autenticación no configurado",
+  auth: "Usuario o contraseña incorrectos",
+  auth_unreachable:
+    "Error al conectar con el servidor de autenticación, contacte a soporte",
+  empleado: "El alias del empleado no está registrado",
+  empleado_db: "No se pudo consultar la base de empleados",
+  internal: "Error interno al iniciar sesión",
+};
+
 export default function LoginForm() {
   const router = useRouter();
   const submittingRef = useRef(false);
@@ -16,17 +27,24 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
+  const [redirectPath, setRedirectPath] = useState("/dashboard");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setRedirectPath(getSafeRedirectPath(params.get("redirect")));
+    const err = params.get("error");
+    if (err) {
+      setMessage({
+        text: ERROR_MESSAGES[err] || "No se pudo iniciar sesión",
+        type: "error",
+      });
+    }
+  }, []);
 
   function handleInputChange(event) {
     const { name, value } = event.target;
     setUser((prev) => ({ ...prev, [name]: value }));
     if (message.text) setMessage({ text: "", type: "" });
-  }
-
-  function getRedirectPath() {
-    if (typeof window === "undefined") return "/dashboard";
-    const params = new URLSearchParams(window.location.search);
-    return getSafeRedirectPath(params.get("redirect"));
   }
 
   async function doLogin(event) {
@@ -52,8 +70,15 @@ export default function LoginForm() {
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          username,
+          password,
+          redirect: redirectPath,
+        }),
       });
 
       let data = {};
@@ -90,7 +115,7 @@ export default function LoginForm() {
       setSessionCookieClient(expiresAt);
 
       setMessage({ text: "Iniciando sesión en SGO...", type: "success" });
-      setTimeout(() => router.replace(getRedirectPath()), 250);
+      setTimeout(() => router.replace(redirectPath), 250);
     } catch (error) {
       console.error("Login error:", error);
       setMessage({
@@ -173,6 +198,7 @@ export default function LoginForm() {
               onSubmit={doLogin}
               noValidate
             >
+              <input type="hidden" name="redirect" value={redirectPath} />
               <div className={styles.field}>
                 <label htmlFor="user">Usuario</label>
                 <input

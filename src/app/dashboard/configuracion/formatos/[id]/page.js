@@ -56,6 +56,7 @@ export default function EditarFormatoPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -97,13 +98,18 @@ export default function EditarFormatoPage() {
     const data = await res.json();
 
     if (data.success) {
-      setMessage({ text: "Formato actualizado", type: "success" });
+      setMessage({ text: "", type: "" });
       if (data.data?.columnas?.length) {
         setColumnas(mapColumnasParaEditor(data.data.columnas));
       }
+      setSuccessModalOpen(true);
       setSaving(false);
     } else {
-      setMessage({ text: data.error || "Error al actualizar", type: "error" });
+      const detail = data.details ? ` (${data.details})` : "";
+      setMessage({
+        text: `${data.error || "Error al actualizar"}${detail}`,
+        type: "error",
+      });
       setSaving(false);
     }
   }
@@ -174,6 +180,38 @@ export default function EditarFormatoPage() {
           </div>
         </form>
       </div>
+
+      {successModalOpen ? (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => setSuccessModalOpen(false)}
+          role="presentation"
+        >
+          <div
+            className={`${styles.modalPanel} ${styles.successModal}`}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="formato-actualizado-titulo"
+          >
+            <header className={styles.modalHeader}>
+              <div>
+                <h2 id="formato-actualizado-titulo">Formato actualizado</h2>
+                <p>Los cambios se guardaron correctamente.</p>
+              </div>
+            </header>
+            <div className={styles.successModalBody}>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => setSuccessModalOpen(false)}
+              >
+                Aceptar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </DashboardShell>
   );
 }

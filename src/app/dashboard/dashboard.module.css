@@ -817,6 +817,17 @@
   max-height: min(92vh, 900px);
 }
 
+.successModal {
+  width: min(420px, 100%);
+  height: auto;
+}
+
+.successModalBody {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 20px 20px;
+}
+
 .editRespuestaBody {
   display: flex;
   flex-direction: column;

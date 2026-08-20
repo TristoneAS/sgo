@@ -1,5 +1,6 @@
 import { jsonError, jsonOk } from "@/libs/api_helpers";
 import { normalizeColumnasPayload } from "@/libs/conditional_rules";
+import { ensureFormatoSchema } from "@/libs/ensure_formato_schema";
 import {
   fetchFormatoCompleto,
   insertColumnasConReglas,
@@ -25,6 +26,8 @@ export async function POST(request) {
   const conn = await sgoDb.getConnection();
 
   try {
+    await ensureFormatoSchema(conn);
+
     const body = await request.json();
     const nombre = String(body.nombre ?? "").trim();
     const descripcion = String(body.descripcion ?? "").trim();
@@ -36,7 +39,7 @@ export async function POST(request) {
     }
 
     if (!columnas.length) {
-      return jsonError("Agregue al menos una columna", 400);
+      return jsonError("Agregue al menos una columna con título", 400);
     }
 
     await conn.beginTransaction();
@@ -54,8 +57,19 @@ export async function POST(request) {
     const formato = await fetchFormatoCompleto(idFormato);
     return jsonOk(formato, "Formato creado correctamente", 201);
   } catch (error) {
-    await conn.rollback();
+    try {
+      await conn.rollback();
+    } catch {
+      /* ignore */
+    }
     console.error("Error al crear formato:", error);
+    if (error?.code === "ER_DUP_ENTRY") {
+      return jsonError(
+        "Ya existe un formato activo con ese nombre",
+        409,
+        error.message,
+      );
+    }
     return jsonError("Error al crear formato", 500, error.message);
   } finally {
     conn.release();

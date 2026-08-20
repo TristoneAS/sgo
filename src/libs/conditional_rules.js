@@ -125,6 +125,44 @@ function toNumber(value) {
   return Number(cleaned);
 }
 
+/** True si el valor de comparación de una regla es numérico. */
+export function esValorNumerico(value) {
+  return !Number.isNaN(toNumber(value));
+}
+
+/**
+ * Al llenar: solo números si la columna es tipo "numero"
+ * o si alguna regla compara contra un valor numérico fijo.
+ */
+export function columnaRequiereNumero(columna) {
+  if (String(columna?.tipo_dato ?? "").trim() === "numero") return true;
+
+  const reglas = Array.isArray(columna?.reglas) ? columna.reglas : [];
+  for (const regla of reglas) {
+    const tipoFuente = regla?.tipo_fuente || "valor";
+    if (tipoFuente === "valor" && esValorNumerico(regla?.valor_comparacion)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/** Deja solo dígitos, un signo inicial y un separador decimal. */
+export function sanitizeNumeroInput(raw) {
+  let s = String(raw ?? "").replace(/[^\d.,\-]/g, "");
+  const negative = s.startsWith("-");
+  s = s.replace(/-/g, "");
+  s = s.replace(",", ".");
+  const firstDot = s.indexOf(".");
+  if (firstDot !== -1) {
+    s =
+      s.slice(0, firstDot + 1) +
+      s.slice(firstDot + 1).replace(/\./g, "");
+  }
+  return (negative ? "-" : "") + s;
+}
+
 export function getValorComparacion(regla, valoresPorColumna = {}) {
   if (regla?.tipo_fuente === "columna") {
     const refId = regla.id_columna_ref;

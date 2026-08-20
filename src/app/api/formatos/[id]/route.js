@@ -1,5 +1,6 @@
 import { jsonError, jsonOk, parseId } from "@/libs/api_helpers";
 import { normalizeColumnasPayload } from "@/libs/conditional_rules";
+import { ensureFormatoSchema } from "@/libs/ensure_formato_schema";
 import {
   fetchFormatoCompleto,
   syncColumnasConReglas,
@@ -15,6 +16,7 @@ export async function GET(_request, { params }) {
       return jsonError("ID de formato inválido", 400);
     }
 
+    await ensureFormatoSchema();
     const formato = await fetchFormatoCompleto(idFormato);
     if (!formato) {
       return jsonError("Formato no encontrado", 404);
@@ -38,6 +40,8 @@ export async function PUT(request, { params }) {
       return jsonError("ID de formato inválido", 400);
     }
 
+    await ensureFormatoSchema(conn);
+
     const body = await request.json();
     const nombre = String(body.nombre ?? "").trim();
     const descripcion = String(body.descripcion ?? "").trim();
@@ -48,7 +52,7 @@ export async function PUT(request, { params }) {
     }
 
     if (!columnas.length) {
-      return jsonError("Agregue al menos una columna", 400);
+      return jsonError("Agregue al menos una columna con título", 400);
     }
 
     const [existing] = await conn.query(
@@ -73,8 +77,19 @@ export async function PUT(request, { params }) {
     const formato = await fetchFormatoCompleto(idFormato, conn);
     return jsonOk(formato, "Formato actualizado correctamente");
   } catch (error) {
-    await conn.rollback();
+    try {
+      await conn.rollback();
+    } catch {
+      /* ignore */
+    }
     console.error("Error al actualizar formato:", error);
+    if (error?.code === "ER_DUP_ENTRY") {
+      return jsonError(
+        "Ya existe un formato activo con ese nombre",
+        409,
+        error.message,
+      );
+    }
     return jsonError("Error al actualizar formato", 500, error.message);
   } finally {
     conn.release();

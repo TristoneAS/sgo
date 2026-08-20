@@ -36,7 +36,11 @@ export default function NuevoFormatoPage() {
     if (data.success) {
       router.push("/dashboard/configuracion/formatos");
     } else {
-      setMessage({ text: data.error || "Error al crear formato", type: "error" });
+      const detail = data.details ? ` (${data.details})` : "";
+      setMessage({
+        text: `${data.error || "Error al crear formato"}${detail}`,
+        type: "error",
+      });
       setSaving(false);
     }
   }

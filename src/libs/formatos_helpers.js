@@ -126,15 +126,9 @@ export async function insertColumnasConReglas(conn, idFormato, columnas) {
 
   for (const columna of columnas) {
     const [result] = await conn.query(
-      `INSERT INTO formato_columnas (id_formato, titulo, orden, tipo_dato, promedio_columnas)
-       VALUES (?, ?, ?, ?, ?)`,
-      [
-        idFormato,
-        columna.titulo,
-        columna.orden,
-        columna.tipo_dato || "texto",
-        null,
-      ],
+      `INSERT INTO formato_columnas (id_formato, titulo, orden, tipo_dato)
+       VALUES (?, ?, ?, ?)`,
+      [idFormato, columna.titulo, columna.orden, columna.tipo_dato || "texto"],
     );
     insertedIds.push(result.insertId);
   }
@@ -244,14 +238,13 @@ export async function syncColumnasConReglas(conn, idFormato, columnas) {
       keptIds.add(id);
     } else {
       const [result] = await conn.query(
-        `INSERT INTO formato_columnas (id_formato, titulo, orden, tipo_dato, promedio_columnas)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO formato_columnas (id_formato, titulo, orden, tipo_dato)
+         VALUES (?, ?, ?, ?)`,
         [
           idFormato,
           columna.titulo,
           columna.orden,
           columna.tipo_dato || "texto",
-          null,
         ],
       );
       finalIds.push(result.insertId);

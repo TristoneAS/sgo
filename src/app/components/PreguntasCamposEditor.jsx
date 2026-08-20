@@ -2,9 +2,11 @@
 
 import {
   COLORES_PRESET,
+  columnaRequiereNumero,
   getEstiloCeldaDoble,
   getEstiloPorReglas,
   OPERADORES,
+  sanitizeNumeroInput,
 } from "@/libs/conditional_rules";
 import {
   emptyDobleValor,
@@ -39,6 +41,18 @@ export default function PreguntasCamposEditor({
     etiqueta2: etiqueta2 || "Act",
   };
 
+  function handleValorChange(columnaId, raw, esNumero) {
+    onChange(columnaId, esNumero ? sanitizeNumeroInput(raw) : raw);
+  }
+
+  function handleDobleValorChange(columnaId, parte, raw, esNumero) {
+    onDobleChange(
+      columnaId,
+      parte,
+      esNumero ? sanitizeNumeroInput(raw) : raw,
+    );
+  }
+
   return (
     <>
       {columnasDobles.size > 0 ? (
@@ -65,6 +79,7 @@ export default function PreguntasCamposEditor({
         {columnas.map((col, index) => {
           const esYtd = isColumnaYtd(col.titulo);
           const esDoble = columnasDobles.has(Number(col.id_columna));
+          const esNumero = columnaRequiereNumero(col);
           const valor = respuestas[col.id_columna];
           const ytdCalc = esYtd
             ? calcularPromedioYtd(respuestas, col.promedio_columnas || [])
@@ -79,6 +94,9 @@ export default function PreguntasCamposEditor({
                   {col.titulo}
                   {esYtd ? (
                     <span className={styles.ytdBadge}>Promedio auto</span>
+                  ) : null}
+                  {!esYtd && esNumero ? (
+                    <span className={styles.ytdBadge}>Solo números</span>
                   ) : null}
                 </label>
                 {!esYtd ? (
@@ -173,11 +191,22 @@ export default function PreguntasCamposEditor({
                     </span>
                     <input
                       className={styles.preguntaInput}
+                      type="text"
+                      inputMode={esNumero ? "decimal" : "text"}
                       value={parseDobleValor(valor || emptyDobleValor()).v1}
                       onChange={(e) =>
-                        onDobleChange(col.id_columna, "v1", e.target.value)
+                        handleDobleValorChange(
+                          col.id_columna,
+                          "v1",
+                          e.target.value,
+                          esNumero,
+                        )
                       }
-                      placeholder={labelsForm.etiqueta1}
+                      placeholder={
+                        esNumero
+                          ? `${labelsForm.etiqueta1} (número)`
+                          : labelsForm.etiqueta1
+                      }
                       style={
                         getEstiloCeldaDoble(
                           "v1",
@@ -195,11 +224,22 @@ export default function PreguntasCamposEditor({
                     </span>
                     <input
                       className={styles.preguntaInput}
+                      type="text"
+                      inputMode={esNumero ? "decimal" : "text"}
                       value={parseDobleValor(valor || emptyDobleValor()).v2}
                       onChange={(e) =>
-                        onDobleChange(col.id_columna, "v2", e.target.value)
+                        handleDobleValorChange(
+                          col.id_columna,
+                          "v2",
+                          e.target.value,
+                          esNumero,
+                        )
                       }
-                      placeholder={labelsForm.etiqueta2}
+                      placeholder={
+                        esNumero
+                          ? `${labelsForm.etiqueta2} (número)`
+                          : labelsForm.etiqueta2
+                      }
                       style={
                         getEstiloCeldaDoble(
                           "v2",
@@ -384,12 +424,33 @@ export default function PreguntasCamposEditor({
                     )}
                   </div>
                 </div>
+              ) : esNumero ? (
+                <input
+                  id={`${idPrefix}-${col.id_columna}`}
+                  className={styles.preguntaInput}
+                  type="text"
+                  inputMode="decimal"
+                  value={valor ?? ""}
+                  onChange={(e) =>
+                    handleValorChange(col.id_columna, e.target.value, true)
+                  }
+                  placeholder="Solo números..."
+                  style={
+                    getEstiloPorReglas(
+                      valor ?? "",
+                      col.reglas,
+                      respuestas,
+                    ) || undefined
+                  }
+                />
               ) : (
                 <textarea
                   id={`${idPrefix}-${col.id_columna}`}
                   className={styles.preguntaInput}
                   value={valor ?? ""}
-                  onChange={(e) => onChange(col.id_columna, e.target.value)}
+                  onChange={(e) =>
+                    handleValorChange(col.id_columna, e.target.value, false)
+                  }
                   rows={3}
                   placeholder="Escribe tu respuesta..."
                   style={

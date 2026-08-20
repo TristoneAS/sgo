@@ -1,5 +1,5 @@
 import { sgoDb } from "@/libs/sgo_db";
-import { parseReglasDobles } from "@/libs/conditional_rules";
+import { parseReglasDobles, parseReglasFila } from "@/libs/conditional_rules";
 import {
   isColumnaYtd,
   MAX_COLUMNAS_PROMEDIO,
@@ -52,7 +52,7 @@ export async function fetchFormatoColumnas(idFormato, conn = sgoDb) {
 export async function fetchFormatoFilas(idFormato, conn = sgoDb) {
   const [filas] = await conn.query(
     `SELECT id_fila, id_formato, creado_por, doble_respuesta, etiqueta_1, etiqueta_2,
-            columnas_dobles, reglas_dobles, created_at
+            columnas_dobles, reglas_dobles, reglas_fila, created_at
      FROM formato_filas
      WHERE id_formato = ?
      ORDER BY id_fila ASC`,
@@ -98,6 +98,7 @@ export async function fetchFormatoFilas(idFormato, conn = sgoDb) {
       etiqueta_2: fila.etiqueta_2 || "Act",
       columnas_dobles: columnasDobles.filter((n) => !Number.isNaN(n)),
       reglas_dobles: parseReglasDobles(fila.reglas_dobles),
+      reglas_fila: parseReglasFila(fila.reglas_fila),
       celdas: celdasPorFila.get(fila.id_fila) || {},
     };
   });
@@ -270,7 +271,7 @@ export async function syncColumnasConReglas(conn, idFormato, columnas) {
 
 async function cleanupFilaRefsTrasSyncColumnas(conn, idFormato, keptIds) {
   const [filas] = await conn.query(
-    `SELECT id_fila, columnas_dobles, reglas_dobles
+    `SELECT id_fila, columnas_dobles, reglas_dobles, reglas_fila
      FROM formato_filas
      WHERE id_formato = ?`,
     [idFormato],
@@ -303,13 +304,32 @@ async function cleanupFilaRefsTrasSyncColumnas(conn, idFormato, keptIds) {
       }
     }
 
+    const reglasFila = parseReglasFila(fila.reglas_fila);
+    const nextReglasFila = {};
+    for (const [key, list] of Object.entries(reglasFila)) {
+      const id = Number(key);
+      if (Number.isNaN(id) || !keptIds.has(id)) continue;
+      const cleaned = (list || [])
+        .map((regla) => {
+          if (regla.tipo_fuente !== "columna") return regla;
+          const ref = Number(regla.id_columna_ref);
+          if (Number.isNaN(ref) || !keptIds.has(ref)) {
+            return null;
+          }
+          return regla;
+        })
+        .filter(Boolean);
+      if (cleaned.length) nextReglasFila[id] = cleaned;
+    }
+
     await conn.query(
       `UPDATE formato_filas
-       SET columnas_dobles = ?, reglas_dobles = ?, doble_respuesta = ?
+       SET columnas_dobles = ?, reglas_dobles = ?, reglas_fila = ?, doble_respuesta = ?
        WHERE id_fila = ?`,
       [
         JSON.stringify(nextDobles),
         JSON.stringify(nextReglas),
+        JSON.stringify(nextReglasFila),
         nextDobles.length ? 1 : 0,
         fila.id_fila,
       ],

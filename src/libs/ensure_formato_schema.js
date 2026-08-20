@@ -77,6 +77,13 @@ export async function ensureFormatoSchema(conn = sgoDb) {
             AFTER columnas_dobles
           `);
         }
+        if (!filaCols.has("reglas_fila")) {
+          await ownConn.query(`
+            ALTER TABLE formato_filas
+            ADD COLUMN reglas_fila TEXT NULL
+            AFTER reglas_dobles
+          `);
+        }
 
         if (!(await tableExists(ownConn, "formato_reglas"))) {
           await ownConn.query(`

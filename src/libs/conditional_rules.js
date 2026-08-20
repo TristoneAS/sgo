@@ -31,6 +31,18 @@ export function emptyRegla() {
   };
 }
 
+/** Regla de color solo para esta fila/métrica (ej. vs Target). */
+export function emptyReglaFila() {
+  return {
+    operador: ">",
+    tipo_fuente: "columna",
+    valor_comparacion: "",
+    id_columna_ref: "",
+    color_fondo: "#ef4444",
+    color_texto: "#ffffff",
+  };
+}
+
 /** Regla Bud/Act: ej. si Act < Bud → pintar Bud */
 export function emptyReglaDoble() {
   return {
@@ -108,6 +120,69 @@ export function serializeReglasDobles(map) {
   return JSON.stringify(normalizeReglasDoblesMap(map || {}));
 }
 
+function normalizeReglaFila(regla, index = 0) {
+  if (!regla || typeof regla !== "object") return null;
+  const operador = String(regla.operador ?? "").trim();
+  if (!OPERADORES.some((o) => o.value === operador)) return null;
+
+  const tipoFuente =
+    String(regla.tipo_fuente ?? "valor").trim() === "columna"
+      ? "columna"
+      : "valor";
+
+  const valor = String(regla.valor_comparacion ?? "").trim();
+  const refIdRaw = regla.id_columna_ref;
+  const refId =
+    refIdRaw === "" || refIdRaw == null ? null : Number(refIdRaw);
+
+  if (tipoFuente === "valor" && !valor) return null;
+  if (tipoFuente === "columna" && (refId == null || Number.isNaN(refId))) {
+    return null;
+  }
+
+  return {
+    operador,
+    tipo_fuente: tipoFuente,
+    valor_comparacion: tipoFuente === "valor" ? valor : "",
+    id_columna_ref: tipoFuente === "columna" ? refId : null,
+    color_fondo: String(regla.color_fondo ?? "#ef4444").trim() || "#ef4444",
+    color_texto: String(regla.color_texto ?? "#ffffff").trim() || "#ffffff",
+    orden: Number(regla.orden ?? index + 1) || index + 1,
+  };
+}
+
+function normalizeReglasFilaMap(map) {
+  const out = {};
+  for (const [key, list] of Object.entries(map || {})) {
+    const id = Number(key);
+    if (Number.isNaN(id) || !Array.isArray(list)) continue;
+    const reglas = list
+      .map((regla, index) => normalizeReglaFila(regla, index))
+      .filter(Boolean);
+    if (reglas.length) out[id] = reglas;
+  }
+  return out;
+}
+
+export function parseReglasFila(raw) {
+  if (!raw) return {};
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return normalizeReglasFilaMap(raw);
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      return normalizeReglasFilaMap(JSON.parse(raw));
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+export function serializeReglasFila(map) {
+  return JSON.stringify(normalizeReglasFilaMap(map || {}));
+}
+
 export function emptyColumna() {
   return {
     titulo: "",
@@ -167,7 +242,11 @@ export function getValorComparacion(regla, valoresPorColumna = {}) {
   if (regla?.tipo_fuente === "columna") {
     const refId = regla.id_columna_ref;
     if (refId == null || refId === "") return "";
-    return valorEscalar(valoresPorColumna[refId], "v2");
+    const raw =
+      valoresPorColumna[refId] ??
+      valoresPorColumna[String(refId)] ??
+      valoresPorColumna[Number(refId)];
+    return valorEscalar(raw, "v2");
   }
   return String(regla?.valor_comparacion ?? "").trim();
 }
@@ -257,6 +336,25 @@ export function getEstiloPorReglas(
   return null;
 }
 
+/**
+ * Estilo de celda simple: reglas de esta fila tienen prioridad
+ * sobre las reglas globales de la columna.
+ */
+export function getEstiloCelda(
+  valorCelda,
+  reglasColumna = [],
+  valoresPorColumna = {},
+  reglasFila = [],
+) {
+  const estiloFila = getEstiloPorReglas(
+    valorCelda,
+    reglasFila,
+    valoresPorColumna,
+  );
+  if (estiloFila) return estiloFila;
+  return getEstiloPorReglas(valorCelda, reglasColumna, valoresPorColumna);
+}
+
 function valorParteDoble(doble, parte) {
   const d = doble && typeof doble === "object" ? doble : { v1: "", v2: "" };
   return String(d[parte] ?? "").trim();
@@ -303,21 +401,18 @@ export function getEstiloParteDoble(parte, doble, reglasDoble = []) {
 }
 
 /**
- * Combina reglas de columna + reglas Bud/Act de la fila.
- * Las de Bud/Act tienen prioridad sobre las de columna.
+ * Estilo Bud/Act: no hereda reglas de columna.
+ * Ambas partes empiezan sin color; solo se pinta la parte
+ * indicada en la regla de la fila (parte_estilo).
  */
 export function getEstiloCeldaDoble(
   parte,
   doble,
-  reglasColumna = [],
-  valoresPorColumna = {},
+  _reglasColumna = [],
+  _valoresPorColumna = {},
   reglasDoble = [],
 ) {
-  const estiloDoble = getEstiloParteDoble(parte, doble, reglasDoble);
-  if (estiloDoble) return estiloDoble;
-
-  const valor = valorParteDoble(doble, parte);
-  return getEstiloPorReglas(valor, reglasColumna, valoresPorColumna);
+  return getEstiloParteDoble(parte, doble, reglasDoble);
 }
 
 export function normalizeColumnasPayload(columnas) {

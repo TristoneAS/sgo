@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { getEstiloCeldaDoble, getEstiloPorReglas } from "@/libs/conditional_rules";
+import { getEstiloCelda, getEstiloCeldaDoble } from "@/libs/conditional_rules";
 import {
   etiquetasDoble,
   isValorDoble,
@@ -229,10 +229,11 @@ export default function FormatosExcelTable() {
                       }
 
                       const valor = valorEscalar(raw);
-                      const reglaStyle = getEstiloPorReglas(
+                      const reglaStyle = getEstiloCelda(
                         valor,
                         col.reglas,
                         fila.celdas || {},
+                        fila.reglas_fila?.[Number(col.id_columna)] || [],
                       );
                       return (
                         <td

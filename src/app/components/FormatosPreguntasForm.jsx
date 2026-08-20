@@ -7,9 +7,11 @@ import PreguntasCamposEditor, {
 } from "@/app/components/PreguntasCamposEditor";
 import {
   emptyReglaDoble,
+  emptyReglaFila,
+  getEstiloCelda,
   getEstiloCeldaDoble,
-  getEstiloPorReglas,
   parseReglasDobles,
+  parseReglasFila,
 } from "@/libs/conditional_rules";
 import {
   etiquetasDoble,
@@ -73,6 +75,7 @@ function useCamposState() {
   const [respuestas, setRespuestas] = useState({});
   const [columnasDobles, setColumnasDobles] = useState(() => new Set());
   const [reglasDobles, setReglasDobles] = useState({});
+  const [reglasFila, setReglasFila] = useState({});
   const [etiqueta1, setEtiqueta1] = useState("Bud");
   const [etiqueta2, setEtiqueta2] = useState("Act");
 
@@ -80,6 +83,7 @@ function useCamposState() {
     setRespuestas(emptyRespuestas(columnas));
     setColumnasDobles(new Set());
     setReglasDobles({});
+    setReglasFila({});
     setEtiqueta1("Bud");
     setEtiqueta2("Act");
   }
@@ -87,6 +91,7 @@ function useCamposState() {
   function loadFromFila(columnas, fila) {
     setColumnasDobles(new Set(parseColumnasDobles(fila.columnas_dobles)));
     setReglasDobles(parseReglasDobles(fila.reglas_dobles));
+    setReglasFila(parseReglasFila(fila.reglas_fila));
     setEtiqueta1(fila.etiqueta_1 || "Bud");
     setEtiqueta2(fila.etiqueta_2 || "Act");
     setRespuestas(respuestasDesdeFila(columnas, fila));
@@ -109,6 +114,7 @@ function useCamposState() {
       setColumnasDobles,
       setReglasDobles,
       setRespuestas,
+      setReglasFila,
     ),
     onAddReglaDoble(columnaId) {
       const id = Number(columnaId);
@@ -136,6 +142,47 @@ function useCamposState() {
         return next;
       });
     },
+    onAddReglaFila(columnaId) {
+      const id = Number(columnaId);
+      setReglasFila((prev) => ({
+        ...prev,
+        [id]: [...(prev[id] || []), emptyReglaFila()],
+      }));
+    },
+    onUpdateReglaFila(columnaId, reglaIndex, patch) {
+      const id = Number(columnaId);
+      setReglasFila((prev) => ({
+        ...prev,
+        [id]: (prev[id] || []).map((regla, i) =>
+          i === reglaIndex ? { ...regla, ...patch } : regla,
+        ),
+      }));
+    },
+    onRemoveReglaFila(columnaId, reglaIndex) {
+      const id = Number(columnaId);
+      setReglasFila((prev) => {
+        const list = (prev[id] || []).filter((_, i) => i !== reglaIndex);
+        const next = { ...prev };
+        if (list.length) next[id] = list;
+        else delete next[id];
+        return next;
+      });
+    },
+    onCopyReglasFilaATodas(columnaId, columnasList = []) {
+      const fromId = Number(columnaId);
+      setReglasFila((prev) => {
+        const source = (prev[fromId] || []).map((regla) => ({ ...regla }));
+        if (!source.length) return prev;
+        const next = { ...prev };
+        for (const col of columnasList) {
+          const id = Number(col.id_columna);
+          if (id === fromId) continue;
+          if (isColumnaYtd(col.titulo)) continue;
+          next[id] = source.map((regla) => ({ ...regla }));
+        }
+        return next;
+      });
+    },
     onEtiqueta1Change: setEtiqueta1,
     onEtiqueta2Change: setEtiqueta2,
   };
@@ -144,6 +191,7 @@ function useCamposState() {
     respuestas,
     columnasDobles,
     reglasDobles,
+    reglasFila,
     etiqueta1,
     etiqueta2,
     reset,
@@ -287,6 +335,11 @@ export default function FormatosPreguntasForm() {
             campos.reglasDobles[id] || [],
           ]),
         ),
+        reglas_fila: Object.fromEntries(
+          Object.entries(campos.reglasFila || {}).filter(
+            ([id]) => !campos.columnasDobles.has(Number(id)),
+          ),
+        ),
         respuestas: respuestasParaGuardar(
           formato.columnas || [],
           campos.respuestas,
@@ -424,6 +477,7 @@ export default function FormatosPreguntasForm() {
               respuestas={create.respuestas}
               columnasDobles={create.columnasDobles}
               reglasDobles={create.reglasDobles}
+              reglasFila={create.reglasFila}
               etiqueta1={create.etiqueta1}
               etiqueta2={create.etiqueta2}
               idPrefix="q"
@@ -583,10 +637,12 @@ export default function FormatosPreguntasForm() {
                           }
 
                           const valor = valorEscalar(raw);
-                          const reglaStyle = getEstiloPorReglas(
+                          const reglaStyle = getEstiloCelda(
                             valor,
                             col.reglas,
                             filaActual.celdas || {},
+                            filaActual.reglas_fila?.[Number(col.id_columna)] ||
+                              [],
                           );
                           return (
                             <td
@@ -652,6 +708,7 @@ export default function FormatosPreguntasForm() {
                 respuestas={edit.respuestas}
                 columnasDobles={edit.columnasDobles}
                 reglasDobles={edit.reglasDobles}
+                reglasFila={edit.reglasFila}
                 etiqueta1={edit.etiqueta1}
                 etiqueta2={edit.etiqueta2}
                 idPrefix="edit-q"

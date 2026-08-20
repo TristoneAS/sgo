@@ -415,6 +415,13 @@
   color: #475569;
 }
 
+.reglasHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
 .addReglaButton {
   padding: 6px 10px;
   border: 1px solid #bfdbfe;

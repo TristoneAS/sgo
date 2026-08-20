@@ -1,5 +1,9 @@
 import { jsonError, jsonOk, parseId } from "@/libs/api_helpers";
-import { serializeReglasDobles } from "@/libs/conditional_rules";
+import {
+  serializeReglasDobles,
+  serializeReglasFila,
+} from "@/libs/conditional_rules";
+import { ensureFormatoSchema } from "@/libs/ensure_formato_schema";
 import { fetchFormatoFilas } from "@/libs/formatos_helpers";
 import { sgoDb } from "@/libs/sgo_db";
 
@@ -25,6 +29,8 @@ export async function PUT(request, { params }) {
       return jsonError("ID inválido", 400);
     }
 
+    await ensureFormatoSchema(conn);
+
     const body = await request.json();
     const etiqueta1 = String(body.etiqueta_1 ?? "Bud").trim() || "Bud";
     const etiqueta2 = String(body.etiqueta_2 ?? "Act").trim() || "Act";
@@ -32,6 +38,7 @@ export async function PUT(request, { params }) {
       ? body.columnas_dobles.map(Number).filter((n) => !Number.isNaN(n))
       : [];
     const reglasDoblesJson = serializeReglasDobles(body.reglas_dobles || {});
+    const reglasFilaJson = serializeReglasFila(body.reglas_fila || {});
     const respuestas =
       body.respuestas && typeof body.respuestas === "object"
         ? body.respuestas
@@ -56,7 +63,7 @@ export async function PUT(request, { params }) {
     await conn.query(
       `UPDATE formato_filas
        SET doble_respuesta = ?, etiqueta_1 = ?, etiqueta_2 = ?,
-           columnas_dobles = ?, reglas_dobles = ?
+           columnas_dobles = ?, reglas_dobles = ?, reglas_fila = ?
        WHERE id_fila = ? AND id_formato = ?`,
       [
         columnasDobles.length ? 1 : 0,
@@ -64,6 +71,7 @@ export async function PUT(request, { params }) {
         etiqueta2,
         JSON.stringify(columnasDobles),
         reglasDoblesJson,
+        reglasFilaJson,
         idFila,
         idFormato,
       ],

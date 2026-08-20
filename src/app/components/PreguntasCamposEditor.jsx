@@ -3,8 +3,8 @@
 import {
   COLORES_PRESET,
   columnaRequiereNumero,
+  getEstiloCelda,
   getEstiloCeldaDoble,
-  getEstiloPorReglas,
   OPERADORES,
   sanitizeNumeroInput,
 } from "@/libs/conditional_rules";
@@ -19,11 +19,177 @@ import {
 } from "@/libs/ytd_promedio";
 import styles from "@/app/dashboard/dashboard.module.css";
 
+function ReglasFilaEditor({
+  columnaId,
+  columnas,
+  reglas,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onCopyATodas,
+}) {
+  const list = reglas || [];
+
+  return (
+    <div className={styles.reglasBlock}>
+      <div className={styles.reglasHeader}>
+        <span>Reglas de color (esta fila)</span>
+        <div className={styles.reglasHeaderActions}>
+          {list.length > 0 && onCopyATodas ? (
+            <button
+              type="button"
+              className={styles.addReglaButton}
+              onClick={() => onCopyATodas(columnaId, columnas)}
+              title="Copia estas reglas al resto de columnas de esta fila"
+            >
+              Copiar a todas
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={styles.addReglaButton}
+            onClick={() => onAdd(columnaId)}
+          >
+            + Regla
+          </button>
+        </div>
+      </div>
+
+      {list.length === 0 ? (
+        <p className={styles.reglasHint}>
+          Ej: si valor &gt; Target → rojo (o verde). Aplica solo a esta
+          métrica/fila.
+        </p>
+      ) : (
+        <div className={styles.reglasList}>
+          {list.map((regla, reglaIndex) => {
+            const tipoFuente = regla.tipo_fuente || "valor";
+            return (
+              <div key={reglaIndex} className={styles.reglaRow}>
+                <span className={styles.reglaSi}>Si</span>
+                <select
+                  value={regla.operador}
+                  onChange={(e) =>
+                    onUpdate(columnaId, reglaIndex, {
+                      operador: e.target.value,
+                    })
+                  }
+                >
+                  {OPERADORES.map((op) => (
+                    <option key={op.value} value={op.value}>
+                      {op.label}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={tipoFuente}
+                  onChange={(e) =>
+                    onUpdate(columnaId, reglaIndex, {
+                      tipo_fuente: e.target.value,
+                      valor_comparacion:
+                        e.target.value === "valor"
+                          ? regla.valor_comparacion || ""
+                          : "",
+                      id_columna_ref:
+                        e.target.value === "columna"
+                          ? regla.id_columna_ref || ""
+                          : "",
+                    })
+                  }
+                >
+                  <option value="valor">Valor fijo</option>
+                  <option value="columna">Otra columna</option>
+                </select>
+
+                {tipoFuente === "columna" ? (
+                  <select
+                    value={
+                      regla.id_columna_ref === "" ||
+                      regla.id_columna_ref == null
+                        ? ""
+                        : String(regla.id_columna_ref)
+                    }
+                    onChange={(e) =>
+                      onUpdate(columnaId, reglaIndex, {
+                        id_columna_ref: e.target.value,
+                      })
+                    }
+                    required
+                  >
+                    <option value="">Selecciona columna...</option>
+                    {columnas.map((otra) =>
+                      Number(otra.id_columna) === Number(columnaId) ? null : (
+                        <option
+                          key={otra.id_columna}
+                          value={String(otra.id_columna)}
+                        >
+                          {otra.titulo?.trim() || `Columna ${otra.id_columna}`}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                ) : (
+                  <input
+                    value={regla.valor_comparacion || ""}
+                    onChange={(e) =>
+                      onUpdate(columnaId, reglaIndex, {
+                        valor_comparacion: e.target.value,
+                      })
+                    }
+                    placeholder="Valor"
+                    required
+                  />
+                )}
+
+                <div className={styles.colorPresets}>
+                  {COLORES_PRESET.map((preset) => (
+                    <button
+                      key={preset.fondo}
+                      type="button"
+                      title={preset.label}
+                      className={styles.colorSwatch}
+                      style={{ background: preset.fondo }}
+                      onClick={() =>
+                        onUpdate(columnaId, reglaIndex, {
+                          color_fondo: preset.fondo,
+                          color_texto: preset.texto,
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+                <span
+                  className={styles.colorPreview}
+                  style={{
+                    background: regla.color_fondo,
+                    color: regla.color_texto,
+                  }}
+                >
+                  Aa
+                </span>
+                <button
+                  type="button"
+                  className={styles.removeButton}
+                  onClick={() => onRemove(columnaId, reglaIndex)}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PreguntasCamposEditor({
   columnas,
   respuestas,
   columnasDobles,
   reglasDobles,
+  reglasFila = {},
   etiqueta1,
   etiqueta2,
   onChange,
@@ -32,6 +198,10 @@ export default function PreguntasCamposEditor({
   onAddReglaDoble,
   onUpdateReglaDoble,
   onRemoveReglaDoble,
+  onAddReglaFila,
+  onUpdateReglaFila,
+  onRemoveReglaFila,
+  onCopyReglasFilaATodas,
   onEtiqueta1Change,
   onEtiqueta2Change,
   idPrefix = "q",
@@ -85,6 +255,10 @@ export default function PreguntasCamposEditor({
             ? calcularPromedioYtd(respuestas, col.promedio_columnas || [])
             : null;
           const ytdEsDoble = esYtd && ytdCalc && typeof ytdCalc === "object";
+          const reglasDeFila =
+            reglasFila[Number(col.id_columna)] ||
+            reglasFila[col.id_columna] ||
+            [];
 
           return (
             <div key={col.id_columna} className={styles.preguntaItem}>
@@ -129,10 +303,11 @@ export default function PreguntasCamposEditor({
                         value={ytdCalc.v1 || ""}
                         readOnly
                         style={
-                          getEstiloPorReglas(
+                          getEstiloCelda(
                             ytdCalc.v1,
                             col.reglas,
                             respuestas,
+                            reglasDeFila,
                           ) || undefined
                         }
                       />
@@ -146,10 +321,11 @@ export default function PreguntasCamposEditor({
                         value={ytdCalc.v2 || ""}
                         readOnly
                         style={
-                          getEstiloPorReglas(
+                          getEstiloCelda(
                             ytdCalc.v2,
                             col.reglas,
                             respuestas,
+                            reglasDeFila,
                           ) || undefined
                         }
                       />
@@ -171,10 +347,11 @@ export default function PreguntasCamposEditor({
                           : "Configura columnas YTD en el formato"
                       }
                       style={
-                        getEstiloPorReglas(
+                        getEstiloCelda(
                           ytdCalc || "",
                           col.reglas,
                           respuestas,
+                          reglasDeFila,
                         ) || undefined
                       }
                     />
@@ -424,43 +601,59 @@ export default function PreguntasCamposEditor({
                     )}
                   </div>
                 </div>
-              ) : esNumero ? (
-                <input
-                  id={`${idPrefix}-${col.id_columna}`}
-                  className={styles.preguntaInput}
-                  type="text"
-                  inputMode="decimal"
-                  value={valor ?? ""}
-                  onChange={(e) =>
-                    handleValorChange(col.id_columna, e.target.value, true)
-                  }
-                  placeholder="Solo números..."
-                  style={
-                    getEstiloPorReglas(
-                      valor ?? "",
-                      col.reglas,
-                      respuestas,
-                    ) || undefined
-                  }
-                />
               ) : (
-                <textarea
-                  id={`${idPrefix}-${col.id_columna}`}
-                  className={styles.preguntaInput}
-                  value={valor ?? ""}
-                  onChange={(e) =>
-                    handleValorChange(col.id_columna, e.target.value, false)
-                  }
-                  rows={3}
-                  placeholder="Escribe tu respuesta..."
-                  style={
-                    getEstiloPorReglas(
-                      valor ?? "",
-                      col.reglas,
-                      respuestas,
-                    ) || undefined
-                  }
-                />
+                <>
+                  {esNumero ? (
+                    <input
+                      id={`${idPrefix}-${col.id_columna}`}
+                      className={styles.preguntaInput}
+                      type="text"
+                      inputMode="decimal"
+                      value={valor ?? ""}
+                      onChange={(e) =>
+                        handleValorChange(col.id_columna, e.target.value, true)
+                      }
+                      placeholder="Solo números..."
+                      style={
+                        getEstiloCelda(
+                          valor ?? "",
+                          col.reglas,
+                          respuestas,
+                          reglasDeFila,
+                        ) || undefined
+                      }
+                    />
+                  ) : (
+                    <textarea
+                      id={`${idPrefix}-${col.id_columna}`}
+                      className={styles.preguntaInput}
+                      value={valor ?? ""}
+                      onChange={(e) =>
+                        handleValorChange(col.id_columna, e.target.value, false)
+                      }
+                      rows={3}
+                      placeholder="Escribe tu respuesta..."
+                      style={
+                        getEstiloCelda(
+                          valor ?? "",
+                          col.reglas,
+                          respuestas,
+                          reglasDeFila,
+                        ) || undefined
+                      }
+                    />
+                  )}
+
+                  <ReglasFilaEditor
+                    columnaId={col.id_columna}
+                    columnas={columnas}
+                    reglas={reglasDeFila}
+                    onAdd={onAddReglaFila}
+                    onUpdate={onUpdateReglaFila}
+                    onRemove={onRemoveReglaFila}
+                    onCopyATodas={onCopyReglasFilaATodas}
+                  />
+                </>
               )}
             </div>
           );
@@ -470,7 +663,12 @@ export default function PreguntasCamposEditor({
   );
 }
 
-export function makeToggleColumnaDoble(setColumnasDobles, setReglasDobles, setRespuestas) {
+export function makeToggleColumnaDoble(
+  setColumnasDobles,
+  setReglasDobles,
+  setRespuestas,
+  setReglasFila,
+) {
   return function toggleColumnaDoble(columnaId, checked) {
     const id = Number(columnaId);
     setColumnasDobles((prev) => {
@@ -480,7 +678,13 @@ export function makeToggleColumnaDoble(setColumnasDobles, setReglasDobles, setRe
       return next;
     });
 
-    if (!checked) {
+    if (checked) {
+      setReglasFila?.((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    } else {
       setReglasDobles((prev) => {
         const next = { ...prev };
         delete next[id];

@@ -1,5 +1,9 @@
 import { jsonError, jsonOk, parseId } from "@/libs/api_helpers";
-import { serializeReglasDobles } from "@/libs/conditional_rules";
+import {
+  serializeReglasDobles,
+  serializeReglasFila,
+} from "@/libs/conditional_rules";
+import { ensureFormatoSchema } from "@/libs/ensure_formato_schema";
 import { fetchFormatoFilas } from "@/libs/formatos_helpers";
 import { sgoDb } from "@/libs/sgo_db";
 
@@ -22,6 +26,7 @@ export async function GET(_request, { params }) {
       return jsonError("ID de formato inválido", 400);
     }
 
+    await ensureFormatoSchema();
     const filas = await fetchFormatoFilas(idFormato);
     return jsonOk(filas);
   } catch (error) {
@@ -41,6 +46,8 @@ export async function POST(request, { params }) {
       return jsonError("ID de formato inválido", 400);
     }
 
+    await ensureFormatoSchema(conn);
+
     const body = await request.json();
     const creadoPor = String(body.creado_por ?? "").trim();
     const etiqueta1 = String(body.etiqueta_1 ?? "Bud").trim() || "Bud";
@@ -49,6 +56,7 @@ export async function POST(request, { params }) {
       ? body.columnas_dobles.map(Number).filter((n) => !Number.isNaN(n))
       : [];
     const reglasDoblesJson = serializeReglasDobles(body.reglas_dobles || {});
+    const reglasFilaJson = serializeReglasFila(body.reglas_fila || {});
     const respuestas =
       body.respuestas && typeof body.respuestas === "object"
         ? body.respuestas
@@ -77,8 +85,8 @@ export async function POST(request, { params }) {
     const [filaResult] = await conn.query(
       `INSERT INTO formato_filas
        (id_formato, creado_por, doble_respuesta, etiqueta_1, etiqueta_2,
-        columnas_dobles, reglas_dobles)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        columnas_dobles, reglas_dobles, reglas_fila)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         idFormato,
         creadoPor || null,
@@ -87,6 +95,7 @@ export async function POST(request, { params }) {
         etiqueta2,
         JSON.stringify(columnasDobles),
         reglasDoblesJson,
+        reglasFilaJson,
       ],
     );
 

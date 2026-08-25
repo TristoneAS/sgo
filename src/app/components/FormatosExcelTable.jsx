@@ -2,6 +2,24 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  Alert,
+  Box,
+  Button,
+  Checkbox,
+  FormControl,
+  FormControlLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
 import { getEstiloCelda, getEstiloCeldaDoble } from "@/libs/conditional_rules";
 import {
   etiquetasDoble,
@@ -10,12 +28,72 @@ import {
   parseDobleValor,
   valorEscalar,
 } from "@/libs/doble_valor";
-import {
-  getColumnWidth,
-  getTableMinWidth,
-} from "@/libs/excel_column_styles";
+import { getColumnWidth, getTableMinWidth } from "@/libs/excel_column_styles";
 import { valorCeldaConYtd } from "@/libs/ytd_promedio";
-import styles from "@/app/dashboard/dashboard.module.css";
+
+const BORDER = "2px solid #64748b";
+
+const headerCellSx = (horizontal, width, expandirTabla) => ({
+  position: "sticky",
+  top: 0,
+  zIndex: 2,
+  border: BORDER,
+  background: "linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)",
+  color: "#1e3a5f",
+  fontWeight: 600,
+  fontSize: 11,
+  lineHeight: 1.25,
+  verticalAlign: horizontal ? "middle" : "bottom",
+  whiteSpace: "normal",
+  wordBreak: "break-word",
+  overflowWrap: "anywhere",
+  ...(horizontal
+    ? {
+        writingMode: "horizontal-tb",
+        transform: "none",
+        height: "auto",
+        minHeight: 44,
+        px: 1.25,
+        py: 1,
+      }
+    : {
+        writingMode: "vertical-rl",
+        transform: "rotate(180deg)",
+        height: 200,
+        minHeight: 200,
+        px: 0.75,
+        py: 1.25,
+      }),
+  ...(expandirTabla ? { minWidth: width } : { width, minWidth: width }),
+});
+
+const bodyCellSx = (width, expandirTabla, extra = {}) => ({
+  border: BORDER,
+  p: 0,
+  verticalAlign: "top",
+  backgroundColor: "#fff",
+  ...(expandirTabla
+    ? { minWidth: width }
+    : { width, minWidth: width, maxWidth: width }),
+  ...extra,
+});
+
+const rowHeaderSx = {
+  position: "sticky",
+  left: 0,
+  zIndex: 3,
+  width: 36,
+  minWidth: 36,
+  border: BORDER,
+  boxShadow: "2px 0 0 #64748b",
+  backgroundColor: "#f1f5f9",
+  color: "#64748b",
+  fontSize: 11,
+  fontWeight: 600,
+  textAlign: "center",
+  px: 0.5,
+  py: 0.5,
+};
 
 export default function FormatosExcelTable() {
   const [formatos, setFormatos] = useState([]);
@@ -24,6 +102,7 @@ export default function FormatosExcelTable() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: "", type: "" });
   const [titulosHorizontales, setTitulosHorizontales] = useState(false);
+  const [expandirTabla, setExpandirTabla] = useState(false);
 
   const loadFormatos = useCallback(async () => {
     const res = await fetch("/api/formatos");
@@ -69,205 +148,326 @@ export default function FormatosExcelTable() {
     : 1100;
 
   return (
-    <div className={styles.tableWorkspace}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        gap: 1,
+      }}
+    >
       {message.text ? (
-        <div
-          className={`${styles.message} ${styles.messageCompact} ${
-            message.type === "error" ? styles.messageError : styles.messageSuccess
-          }`}
+        <Alert
+          severity={message.type === "error" ? "error" : "success"}
+          sx={{ py: 0.5 }}
         >
           {message.text}
-        </div>
+        </Alert>
       ) : null}
 
-      <div className={styles.toolbarCompact}>
-        <select
-          className={styles.selectCompact}
-          value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
+      <Box
+        sx={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 1,
+        }}
+      >
+        <FormControl size="small" sx={{ minWidth: 220 }}>
+          <Select
+            displayEmpty
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+          >
+            <MenuItem value="">
+              <em>Selecciona un formato...</em>
+            </MenuItem>
+            {formatos.map((f) => (
+              <MenuItem key={f.id_formato} value={f.id_formato}>
+                {f.nombre}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <FormControlLabel
+          control={
+            <Checkbox
+              size="small"
+              checked={titulosHorizontales}
+              onChange={(e) => setTitulosHorizontales(e.target.checked)}
+            />
+          }
+          label={
+            titulosHorizontales ? "Títulos horizontales" : "Títulos verticales"
+          }
+          sx={{
+            m: 0,
+            px: 1,
+            py: 0.25,
+            border: "1px solid #bfdbfe",
+            borderRadius: 1,
+            bgcolor: "#eff6ff",
+            "& .MuiFormControlLabel-label": {
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#1e3a5f",
+            },
+          }}
+        />
+
+        <FormControlLabel
+          control={
+            <Checkbox
+              size="small"
+              checked={expandirTabla}
+              onChange={(e) => setExpandirTabla(e.target.checked)}
+            />
+          }
+          label={expandirTabla ? "Tabla expandida" : "Expandir tabla"}
+          sx={{
+            m: 0,
+            px: 1,
+            py: 0.25,
+            border: "1px solid #bfdbfe",
+            borderRadius: 1,
+            bgcolor: "#eff6ff",
+            "& .MuiFormControlLabel-label": {
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#1e3a5f",
+            },
+          }}
+        />
+
+        <Button
+          component={Link}
+          href="/dashboard/llenar-formatos"
+          size="small"
+          variant="outlined"
         >
-          <option value="">Selecciona un formato...</option>
-          {formatos.map((f) => (
-            <option key={f.id_formato} value={f.id_formato}>
-              {f.nombre}
-            </option>
-          ))}
-        </select>
-
-        <label className={styles.toggleTitulos}>
-          <input
-            type="checkbox"
-            checked={titulosHorizontales}
-            onChange={(e) => setTitulosHorizontales(e.target.checked)}
-          />
-          <span>
-            {titulosHorizontales
-              ? "Títulos horizontales"
-              : "Títulos verticales"}
-          </span>
-        </label>
-
-        <Link href="/dashboard/llenar-formatos" className={styles.linkButton}>
           Ir a llenar formatos
-        </Link>
-      </div>
+        </Button>
+      </Box>
 
       {loading && selectedId ? (
-        <p className={styles.loadingText}>Cargando formato...</p>
+        <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+          Cargando formato...
+        </Typography>
       ) : !selectedId ? (
-        <div className={styles.emptyStateCompact}>
+        <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
           Selecciona un formato para visualizar sus respuestas en tabla.
-        </div>
+        </Typography>
       ) : !formato ? (
-        <div className={styles.emptyStateCompact}>Formato no encontrado.</div>
+        <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+          Formato no encontrado.
+        </Typography>
       ) : !filas.length ? (
-        <div className={styles.emptyStateCompact}>
+        <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
           Este formato aún no tiene respuestas.{" "}
-          <Link href="/dashboard/llenar-formatos">Llénalo aquí</Link>.
-        </div>
-      ) : (
-        <div className={styles.tableWrapWide}>
-          <table
-            className={styles.tableWide}
-            style={{ minWidth: `${tableMinWidth}px` }}
+          <Button
+            component={Link}
+            href="/dashboard/llenar-formatos"
+            size="small"
           >
-            <thead>
-              <tr>
-                <th
-                  className={`${styles.rowHeader} ${styles.stickyCol}`}
-                  style={{ width: 36, minWidth: 36 }}
+            Llénalo aquí
+          </Button>
+        </Typography>
+      ) : (
+        <TableContainer
+          component={Paper}
+          elevation={0}
+          sx={{
+            flex: 1,
+            width: "100%",
+            minHeight: 0,
+            maxHeight: "calc(100vh - 200px)",
+            overflow: "auto",
+            border: BORDER,
+            borderRadius: 2,
+          }}
+        >
+          <Table
+            stickyHeader
+            size="small"
+            sx={{
+              minWidth: tableMinWidth,
+              width: expandirTabla ? "100%" : "max-content",
+              tableLayout: expandirTabla ? "auto" : "fixed",
+              borderCollapse: "collapse",
+              "& .MuiTableCell-root": {
+                border: BORDER,
+              },
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                <TableCell
+                  sx={{
+                    ...rowHeaderSx,
+                    top: 0,
+                    zIndex: 4,
+                  }}
                 >
                   #
-                </th>
+                </TableCell>
                 {columnas.map((col) => {
                   const width = getColumnWidth(col.titulo, widthOpts);
                   return (
-                    <th
+                    <TableCell
                       key={col.id_columna}
-                      className={
-                        titulosHorizontales
-                          ? styles.columnHeaderHorizontal
-                          : styles.columnHeader
-                      }
-                      style={{ width, minWidth: width }}
                       title={col.titulo}
+                      sx={headerCellSx(
+                        titulosHorizontales,
+                        width,
+                        expandirTabla,
+                      )}
                     >
                       {col.titulo}
-                    </th>
+                    </TableCell>
                   );
                 })}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHead>
+            <TableBody>
               {filas.map((fila, index) => (
-                <tr key={fila.id_fila}>
-                  <td className={`${styles.rowHeader} ${styles.stickyCol}`}>
-                    {index + 1}
-                  </td>
-                    {columnas.map((col) => {
-                      const width = getColumnWidth(col.titulo, widthOpts);
-                      const raw = valorCeldaConYtd(col, fila.celdas || {});
-                      const labels = etiquetasDoble(fila);
-                      const dobles = new Set(
-                        parseColumnasDobles(fila.columnas_dobles),
-                      );
-                      const esDoble =
-                        (typeof raw === "object" && raw != null) ||
-                        dobles.has(Number(col.id_columna)) ||
-                        isValorDoble(raw);
+                <TableRow key={fila.id_fila} hover>
+                  <TableCell sx={rowHeaderSx}>{index + 1}</TableCell>
+                  {columnas.map((col) => {
+                    const width = getColumnWidth(col.titulo, widthOpts);
+                    const raw = valorCeldaConYtd(col, fila.celdas || {});
+                    const labels = etiquetasDoble(fila);
+                    const dobles = new Set(
+                      parseColumnasDobles(fila.columnas_dobles),
+                    );
+                    const esDoble =
+                      (typeof raw === "object" && raw != null) ||
+                      dobles.has(Number(col.id_columna)) ||
+                      isValorDoble(raw);
 
-                      if (esDoble) {
-                        const doble = parseDobleValor(raw);
-                        const reglasFila =
-                          fila.reglas_dobles?.[Number(col.id_columna)] || [];
-                        const style1 = getEstiloCeldaDoble(
-                          "v1",
-                          doble,
-                          col.reglas,
-                          fila.celdas || {},
-                          reglasFila,
-                        );
-                        const style2 = getEstiloCeldaDoble(
-                          "v2",
-                          doble,
-                          col.reglas,
-                          fila.celdas || {},
-                          reglasFila,
-                        );
-                        return (
-                          <td
-                            key={col.id_columna}
-                            className={styles.cell}
-                            style={{
-                              width,
-                              minWidth: width,
-                              maxWidth: width,
-                            }}
-                          >
-                            <div className={styles.dobleCell}>
-                              <div
-                                className={styles.dobleCellHalf}
-                                style={style1 || undefined}
-                              >
-                                <span className={styles.dobleCellTag}>
-                                  {labels.etiqueta1}
-                                </span>
-                                {doble.v1 || "—"}
-                              </div>
-                              <div
-                                className={styles.dobleCellHalf}
-                                style={style2 || undefined}
-                              >
-                                <span className={styles.dobleCellTag}>
-                                  {labels.etiqueta2}
-                                </span>
-                                {doble.v2 || "—"}
-                              </div>
-                            </div>
-                          </td>
-                        );
-                      }
-
-                      const valor = valorEscalar(raw);
-                      const reglaStyle = getEstiloCelda(
-                        valor,
+                    if (esDoble) {
+                      const doble = parseDobleValor(raw);
+                      const reglasFila =
+                        fila.reglas_dobles?.[Number(col.id_columna)] || [];
+                      const style1 = getEstiloCeldaDoble(
+                        "v1",
+                        doble,
                         col.reglas,
                         fila.celdas || {},
-                        fila.reglas_fila?.[Number(col.id_columna)] || [],
+                        reglasFila,
+                      );
+                      const style2 = getEstiloCeldaDoble(
+                        "v2",
+                        doble,
+                        col.reglas,
+                        fila.celdas || {},
+                        reglasFila,
                       );
                       return (
-                        <td
+                        <TableCell
                           key={col.id_columna}
-                          className={styles.cell}
-                          style={{
-                            width,
-                            minWidth: width,
-                            maxWidth: width,
-                            ...(reglaStyle || {}),
+                          sx={bodyCellSx(width, expandirTabla)}
+                        >
+                          <Box
+                            sx={{
+                              display: "flex",
+                              flexDirection: "column",
+                              minHeight: "100%",
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                flex: 1,
+                                px: 0.75,
+                                py: 0.5,
+                                fontSize: 12,
+                                lineHeight: 1.3,
+                                borderBottom: BORDER,
+                                wordBreak: "break-word",
+                                ...style1,
+                              }}
+                            >
+                              <Box
+                                component="span"
+                                sx={{
+                                  mr: 0.5,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: "#64748b",
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                {labels.etiqueta1}
+                              </Box>
+                              {doble.v1 || "—"}
+                            </Box>
+                            <Box
+                              sx={{
+                                flex: 1,
+                                px: 0.75,
+                                py: 0.5,
+                                fontSize: 12,
+                                lineHeight: 1.3,
+                                wordBreak: "break-word",
+                                ...style2,
+                              }}
+                            >
+                              <Box
+                                component="span"
+                                sx={{
+                                  mr: 0.5,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: "#64748b",
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                {labels.etiqueta2}
+                              </Box>
+                              {doble.v2 || "—"}
+                            </Box>
+                          </Box>
+                        </TableCell>
+                      );
+                    }
+
+                    const valor = valorEscalar(raw);
+                    const reglaStyle = getEstiloCelda(
+                      valor,
+                      col.reglas,
+                      fila.celdas || {},
+                      fila.reglas_fila?.[Number(col.id_columna)] || [],
+                    );
+                    return (
+                      <TableCell
+                        key={col.id_columna}
+                        sx={bodyCellSx(width, expandirTabla, reglaStyle || {})}
+                      >
+                        <Box
+                          sx={{
+                            minHeight: 36,
+                            px: 1,
+                            py: 0.75,
+                            fontSize: 12,
+                            lineHeight: 1.3,
+                            wordBreak: "break-word",
+                            whiteSpace: "pre-wrap",
+                            color: reglaStyle?.color || "#1e293b",
+                            background: "transparent",
                           }}
                         >
-                          <div
-                            className={styles.cellReadonly}
-                            style={
-                              reglaStyle
-                                ? {
-                                    color: reglaStyle.color,
-                                    background: "transparent",
-                                  }
-                                : undefined
-                            }
-                          >
-                            {valor || "—"}
-                          </div>
-                        </td>
-                      );
-                    })}
-                </tr>
+                          {valor || "—"}
+                        </Box>
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
-    </div>
+    </Box>
   );
 }

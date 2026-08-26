@@ -45,16 +45,44 @@ export default function DashboardShell({
   );
 
   useEffect(() => {
-    syncSessionCookieFromStorage();
+    let cancelled = false;
 
-    if (!isAuthenticatedClient()) {
-      router.replace("/");
-      return;
+    function resolveAuth() {
+      try {
+        syncSessionCookieFromStorage();
+
+        if (!isAuthenticatedClient()) {
+          window.location.replace("/");
+          return;
+        }
+
+        if (!cancelled) {
+          setUsuario(localStorage.getItem("usuario") || "");
+          setReady(true);
+        }
+      } catch (error) {
+        console.error("Error validando sesión:", error);
+        window.location.replace("/");
+      }
     }
 
-    setUsuario(localStorage.getItem("usuario") || "");
-    setReady(true);
-  }, [router]);
+    resolveAuth();
+
+    // Evita quedarse infinito en "Cargando..." si algo falló en el primer intento
+    const retry = window.setTimeout(() => {
+      if (cancelled) return;
+      setReady((prev) => {
+        if (prev) return prev;
+        resolveAuth();
+        return prev;
+      });
+    }, 800);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(retry);
+    };
+  }, []);
 
   useEffect(() => {
     if (

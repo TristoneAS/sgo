@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   getSafeRedirectPath,
   getSessionExpiresAt,
@@ -21,7 +20,6 @@ const ERROR_MESSAGES = {
 };
 
 export default function LoginForm() {
-  const router = useRouter();
   const submittingRef = useRef(false);
   const [user, setUser] = useState({ user: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -115,7 +113,8 @@ export default function LoginForm() {
       setSessionCookieClient(expiresAt);
 
       setMessage({ text: "Iniciando sesión en SGO...", type: "success" });
-      setTimeout(() => router.replace(redirectPath), 250);
+      // Navegación dura: evita quedar en "Cargando..." por soft-nav
+      window.location.assign(redirectPath);
     } catch (error) {
       console.error("Login error:", error);
       setMessage({

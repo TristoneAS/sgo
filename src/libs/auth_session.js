@@ -58,32 +58,45 @@ export function clearAuthStorageClient() {
 export function isAuthenticatedClient() {
   if (typeof window === "undefined") return false;
 
-  if (!hasSessionCookieClient()) {
-    return false;
-  }
-
-  if (localStorage.getItem("isAuthenticated") !== "true") {
-    return false;
-  }
-
-  const expRaw = localStorage.getItem("sessionExpiresAt");
-  if (expRaw) {
-    const exp = Number(expRaw);
-    if (!Number.isNaN(exp) && Date.now() > exp) {
-      clearAuthStorageClient();
+  try {
+    if (localStorage.getItem("isAuthenticated") !== "true") {
       return false;
     }
-  }
 
-  return true;
+    const expRaw = localStorage.getItem("sessionExpiresAt");
+    if (expRaw) {
+      const exp = Number(expRaw);
+      if (!Number.isNaN(exp) && Date.now() > exp) {
+        clearAuthStorageClient();
+        return false;
+      }
+      if (!Number.isNaN(exp) && exp > Date.now() && !hasSessionCookieClient()) {
+        setSessionCookieClient(exp);
+      }
+    } else if (!hasSessionCookieClient()) {
+      setSessionCookieClient(getSessionExpiresAt());
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function syncSessionCookieFromStorage() {
   if (typeof window === "undefined") return;
-  const expRaw = localStorage.getItem("sessionExpiresAt");
-  const exp = expRaw ? Number(expRaw) : NaN;
-  if (!Number.isNaN(exp) && exp > Date.now()) {
-    setSessionCookieClient(exp);
+  try {
+    const expRaw = localStorage.getItem("sessionExpiresAt");
+    const exp = expRaw ? Number(expRaw) : NaN;
+    if (!Number.isNaN(exp) && exp > Date.now()) {
+      setSessionCookieClient(exp);
+      return;
+    }
+    if (localStorage.getItem("isAuthenticated") === "true") {
+      setSessionCookieClient(getSessionExpiresAt());
+    }
+  } catch {
+    /* ignore */
   }
 }
 

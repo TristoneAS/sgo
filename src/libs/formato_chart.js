@@ -212,6 +212,49 @@ export function tituloRenglonGrafica(fila, columnas = [], index = 0) {
 }
 
 /**
+ * Regresión lineal simple y = a + b*x sobre puntos {x,y}.
+ * Devuelve valores proyectados para cada índice 0..n-1, o null si no hay datos.
+ */
+export function calcularTendencia(valores) {
+  const samples = [];
+  for (let i = 0; i < valores.length; i += 1) {
+    const y = valores[i];
+    if (typeof y === "number" && Number.isFinite(y)) {
+      samples.push({ x: i, y });
+    }
+  }
+
+  if (samples.length < 2) {
+    return valores.map(() => null);
+  }
+
+  const n = samples.length;
+  let sumX = 0;
+  let sumY = 0;
+  let sumXY = 0;
+  let sumXX = 0;
+  for (const s of samples) {
+    sumX += s.x;
+    sumY += s.y;
+    sumXY += s.x * s.y;
+    sumXX += s.x * s.x;
+  }
+
+  const den = n * sumXX - sumX * sumX;
+  if (den === 0) {
+    return valores.map(() => null);
+  }
+
+  const b = (n * sumXY - sumX * sumY) / den;
+  const a = (sumY - b * sumX) / n;
+
+  return valores.map((_, i) => {
+    const y = a + b * i;
+    return Number.isFinite(y) ? Math.round(y * 1000) / 1000 : null;
+  });
+}
+
+/**
  * Serie(s) para graficar un renglón de Enero→YTD.
  */
 export function buildSerieRenglon(fila, columnas = [], index = 0) {
@@ -220,7 +263,7 @@ export function buildSerieRenglon(fila, columnas = [], index = 0) {
   const meta = metaRenglonGrafica(fila, columnas);
   let dual = false;
 
-  const points = eje.map(({ col, label }) => {
+  const points = eje.map(({ col, label, esYtd }) => {
     const raw = valorCeldaConYtd(col, fila.celdas || {});
     const esDoble = celdaEsDoble(col, fila, raw);
 
@@ -229,6 +272,7 @@ export function buildSerieRenglon(fila, columnas = [], index = 0) {
       const d = parseDobleValor(raw);
       return {
         label,
+        esYtd: Boolean(esYtd),
         v1: toNumberOrNull(d.v1),
         v2: toNumberOrNull(d.v2),
         valor: null,
@@ -238,6 +282,7 @@ export function buildSerieRenglon(fila, columnas = [], index = 0) {
     const valor = toNumberOrNull(valorEscalar(raw));
     return {
       label,
+      esYtd: Boolean(esYtd),
       v1: null,
       v2: null,
       valor,
@@ -248,6 +293,14 @@ export function buildSerieRenglon(fila, columnas = [], index = 0) {
     dual = points.some((p) => p.v1 != null || p.v2 != null);
   }
 
+  // Ajuste con meses (sin YTD); la proyección cubre todo el eje incluido YTD
+  const fitValues = points.map((p) => {
+    if (p.esYtd) return null;
+    if (dual) return p.v2 != null ? p.v2 : p.v1;
+    return p.valor;
+  });
+  const tendencia = calcularTendencia(fitValues);
+
   return {
     id: fila.id_fila,
     title: tituloRenglonGrafica(fila, columnas, index),
@@ -255,6 +308,9 @@ export function buildSerieRenglon(fila, columnas = [], index = 0) {
     dual,
     etiqueta1: labels.etiqueta1,
     etiqueta2: labels.etiqueta2,
-    points,
+    points: points.map((p, i) => ({
+      ...p,
+      tendencia: tendencia[i],
+    })),
   };
 }

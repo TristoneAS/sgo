@@ -24,12 +24,16 @@ const COLOR_V1 = "#2563eb";
 const COLOR_V2 = "#dc2626";
 const COLOR_SIMPLE = "#0f766e";
 const COLOR_OBJETIVO = "#ca8a04";
+const COLOR_TENDENCIA = "#7c3aed";
 
 function chartDataFromSerie(serie) {
   const objetivo =
     typeof serie.meta?.objetivoValor === "number"
       ? serie.meta.objetivoValor
       : null;
+  const tieneTendencia = serie.points.some(
+    (p) => typeof p.tendencia === "number",
+  );
 
   return serie.points.map((p) => ({
     name: p.label,
@@ -40,6 +44,7 @@ function chartDataFromSerie(serie) {
         }
       : { Valor: p.valor }),
     ...(objetivo != null ? { Objetivo: objetivo } : {}),
+    ...(tieneTendencia ? { Tendencia: p.tendencia } : {}),
   }));
 }
 
@@ -114,6 +119,7 @@ function RenglonChart({ serie }) {
     typeof serie.meta?.objetivoValor === "number"
       ? serie.meta.objetivoValor
       : null;
+  const tieneTendencia = data.some((p) => typeof p.Tendencia === "number");
 
   return (
     <Card
@@ -208,6 +214,19 @@ function RenglonChart({ serie }) {
                   strokeDasharray="6 4"
                   dot={false}
                   activeDot={false}
+                  legendType="plainline"
+                />
+              ) : null}
+              {tieneTendencia ? (
+                <Line
+                  type="linear"
+                  dataKey="Tendencia"
+                  stroke={COLOR_TENDENCIA}
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  dot={false}
+                  activeDot={false}
+                  connectNulls
                   legendType="plainline"
                 />
               ) : null}

@@ -170,11 +170,13 @@ const META_CAMPOS = [
 
 /**
  * Extrae Métrico / Objetivo / Responsable (por título de columna) para la leyenda.
+ * `objetivoValor` es el número parseado (si se puede) para la línea de referencia.
  */
 export function metaRenglonGrafica(fila, columnas = []) {
   const meta = {
     metrico: "",
     objetivo: "",
+    objetivoValor: null,
     responsable: "",
   };
 
@@ -187,6 +189,7 @@ export function metaRenglonGrafica(fila, columnas = []) {
     if (text) meta[campo.key] = text;
   }
 
+  meta.objetivoValor = toNumberOrNull(meta.objetivo);
   return meta;
 }
 

@@ -12,6 +12,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -22,8 +23,14 @@ import { buildSerieRenglon } from "@/libs/formato_chart";
 const COLOR_V1 = "#2563eb";
 const COLOR_V2 = "#dc2626";
 const COLOR_SIMPLE = "#0f766e";
+const COLOR_OBJETIVO = "#ca8a04";
 
 function chartDataFromSerie(serie) {
+  const objetivo =
+    typeof serie.meta?.objetivoValor === "number"
+      ? serie.meta.objetivoValor
+      : null;
+
   return serie.points.map((p) => ({
     name: p.label,
     ...(serie.dual
@@ -32,6 +39,7 @@ function chartDataFromSerie(serie) {
           [serie.etiqueta2]: p.v2,
         }
       : { Valor: p.valor }),
+    ...(objetivo != null ? { Objetivo: objetivo } : {}),
   }));
 }
 
@@ -102,6 +110,10 @@ function MetaLegend({ meta = {} }) {
 
 function RenglonChart({ serie }) {
   const data = useMemo(() => chartDataFromSerie(serie), [serie]);
+  const objetivoValor =
+    typeof serie.meta?.objetivoValor === "number"
+      ? serie.meta.objetivoValor
+      : null;
 
   return (
     <Card
@@ -142,6 +154,22 @@ function RenglonChart({ serie }) {
                 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
+              {objetivoValor != null ? (
+                <ReferenceLine
+                  y={objetivoValor}
+                  stroke={COLOR_OBJETIVO}
+                  strokeDasharray="6 4"
+                  strokeWidth={2}
+                  ifOverflow="extendDomain"
+                  label={{
+                    value: `Obj. ${objetivoValor}`,
+                    position: "insideTopRight",
+                    fill: COLOR_OBJETIVO,
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                />
+              ) : null}
               {serie.dual ? (
                 <>
                   <Line
@@ -171,6 +199,18 @@ function RenglonChart({ serie }) {
                   connectNulls={false}
                 />
               )}
+              {objetivoValor != null ? (
+                <Line
+                  type="monotone"
+                  dataKey="Objetivo"
+                  stroke={COLOR_OBJETIVO}
+                  strokeWidth={2}
+                  strokeDasharray="6 4"
+                  dot={false}
+                  activeDot={false}
+                  legendType="plainline"
+                />
+              ) : null}
             </LineChart>
           </ResponsiveContainer>
         </Box>

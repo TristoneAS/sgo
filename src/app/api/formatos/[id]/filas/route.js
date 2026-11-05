@@ -4,6 +4,7 @@ import {
   serializeReglasFila,
 } from "@/libs/conditional_rules";
 import { ensureFormatoSchema } from "@/libs/ensure_formato_schema";
+import { anioActual, parseAnio } from "@/libs/formato_anio";
 import { fetchFormatoFilas } from "@/libs/formatos_helpers";
 import { sgoDb } from "@/libs/sgo_db";
 
@@ -17,7 +18,7 @@ function normalizeRespuestaValor(valor) {
   return String(valor ?? "").trim();
 }
 
-export async function GET(_request, { params }) {
+export async function GET(request, { params }) {
   try {
     const resolved = await params;
     const idFormato = parseId(resolved, "id");
@@ -26,8 +27,17 @@ export async function GET(_request, { params }) {
       return jsonError("ID de formato inválido", 400);
     }
 
+    const anioParam = new URL(request.url).searchParams.get("anio");
+    let anio;
+    if (anioParam != null && anioParam !== "") {
+      anio = parseAnio(anioParam);
+      if (anio == null) {
+        return jsonError("Año inválido", 400);
+      }
+    }
+
     await ensureFormatoSchema();
-    const filas = await fetchFormatoFilas(idFormato);
+    const filas = await fetchFormatoFilas(idFormato, sgoDb, { anio });
     return jsonOk(filas);
   } catch (error) {
     console.error("Error al listar filas:", error);
@@ -50,6 +60,7 @@ export async function POST(request, { params }) {
 
     const body = await request.json();
     const creadoPor = String(body.creado_por ?? "").trim();
+    const anio = parseAnio(body.anio) ?? anioActual();
     const etiqueta1 = String(body.etiqueta_1 ?? "Bud").trim() || "Bud";
     const etiqueta2 = String(body.etiqueta_2 ?? "Act").trim() || "Act";
     const columnasDobles = Array.isArray(body.columnas_dobles)
@@ -61,6 +72,10 @@ export async function POST(request, { params }) {
       body.respuestas && typeof body.respuestas === "object"
         ? body.respuestas
         : {};
+
+    if (body.anio != null && body.anio !== "" && parseAnio(body.anio) == null) {
+      return jsonError("Año inválido", 400);
+    }
 
     const [formatoRows] = await conn.query(
       `SELECT id_formato FROM formatos WHERE id_formato = ? AND estado = 'activo'`,
@@ -84,11 +99,12 @@ export async function POST(request, { params }) {
 
     const [filaResult] = await conn.query(
       `INSERT INTO formato_filas
-       (id_formato, creado_por, doble_respuesta, etiqueta_1, etiqueta_2,
+       (id_formato, anio, creado_por, doble_respuesta, etiqueta_1, etiqueta_2,
         columnas_dobles, reglas_dobles, reglas_fila)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         idFormato,
+        anio,
         creadoPor || null,
         columnasDobles.length ? 1 : 0,
         etiqueta1,
@@ -111,7 +127,7 @@ export async function POST(request, { params }) {
 
     await conn.commit();
 
-    const filas = await fetchFormatoFilas(idFormato, conn);
+    const filas = await fetchFormatoFilas(idFormato, conn, { anio });
     const fila = filas.find((f) => f.id_fila === idFila) || null;
 
     return jsonOk(fila, "Fila registrada correctamente", 201);

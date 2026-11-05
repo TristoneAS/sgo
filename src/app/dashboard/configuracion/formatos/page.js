@@ -1,26 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DashboardShell from "@/app/components/DashboardShell";
 import styles from "@/app/dashboard/dashboard.module.css";
 
 export default function FormatosListPage() {
   const [formatos, setFormatos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [filtroCategoria, setFiltroCategoria] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: "", type: "" });
 
-  async function loadFormatos() {
+  async function loadData() {
     setLoading(true);
-    const res = await fetch("/api/formatos");
-    const data = await res.json();
-    setFormatos(data.success ? data.data : []);
+    const [resFormatos, resCategorias] = await Promise.all([
+      fetch("/api/formatos"),
+      fetch("/api/categorias"),
+    ]);
+    const dataFormatos = await resFormatos.json();
+    const dataCategorias = await resCategorias.json();
+    setFormatos(dataFormatos.success ? dataFormatos.data : []);
+    setCategorias(dataCategorias.success ? dataCategorias.data : []);
     setLoading(false);
   }
 
   useEffect(() => {
-    loadFormatos();
+    loadData();
   }, []);
+
+  const formatosFiltrados = useMemo(() => {
+    if (!filtroCategoria) return formatos;
+    if (filtroCategoria === "sin") {
+      return formatos.filter((f) => !f.id_categoria);
+    }
+    const id = Number(filtroCategoria);
+    return formatos.filter((f) => Number(f.id_categoria) === id);
+  }, [formatos, filtroCategoria]);
 
   async function handleDelete(id) {
     if (!window.confirm("¿Eliminar este formato? Se perderán sus filas.")) {
@@ -32,7 +48,7 @@ export default function FormatosListPage() {
 
     if (data.success) {
       setMessage({ text: "Formato eliminado", type: "success" });
-      loadFormatos();
+      loadData();
     } else {
       setMessage({ text: data.error || "Error al eliminar", type: "error" });
     }
@@ -44,7 +60,20 @@ export default function FormatosListPage() {
       subtitle="Administra tus plantillas y columnas"
     >
       <div className={styles.toolbar}>
-        <div />
+        <select
+          className={styles.select}
+          value={filtroCategoria}
+          onChange={(e) => setFiltroCategoria(e.target.value)}
+          aria-label="Filtrar por categoría"
+        >
+          <option value="">Todas las categorías</option>
+          <option value="sin">Sin categoría</option>
+          {categorias.map((cat) => (
+            <option key={cat.id_categoria} value={cat.id_categoria}>
+              {cat.nombre}
+            </option>
+          ))}
+        </select>
         <Link
           href="/dashboard/configuracion/formatos/nuevo"
           className={styles.primaryButton}
@@ -74,15 +103,24 @@ export default function FormatosListPage() {
             Aún no hay formatos creados. Usa &quot;Crear Formatos&quot; para
             definir columnas personalizadas.
           </p>
+        ) : !formatosFiltrados.length ? (
+          <p style={{ color: "#64748b" }}>
+            No hay formatos en esta categoría.
+          </p>
         ) : (
           <div className={styles.formatList}>
-            {formatos.map((formato) => (
+            {formatosFiltrados.map((formato) => (
               <div key={formato.id_formato} className={styles.formatItem}>
                 <div>
-                  <h3>{formato.nombre}</h3>
-                  {formato.descripcion ? (
-                    <p>{formato.descripcion}</p>
-                  ) : null}
+                  <h3>
+                    {formato.nombre}
+                    {formato.categoria_nombre ? (
+                      <span className={styles.categoriaBadge}>
+                        {formato.categoria_nombre}
+                      </span>
+                    ) : null}
+                  </h3>
+                  {formato.descripcion ? <p>{formato.descripcion}</p> : null}
                 </div>
                 <div className={styles.formatActions}>
                   <Link

@@ -4,6 +4,7 @@ import {
   serializeReglasFila,
 } from "@/libs/conditional_rules";
 import { ensureFormatoSchema } from "@/libs/ensure_formato_schema";
+import { anioActual, parseAnio } from "@/libs/formato_anio";
 import { fetchFormatoFilas } from "@/libs/formatos_helpers";
 import { sgoDb } from "@/libs/sgo_db";
 
@@ -32,6 +33,13 @@ export async function PUT(request, { params }) {
     await ensureFormatoSchema(conn);
 
     const body = await request.json();
+    const anio =
+      body.anio != null && body.anio !== ""
+        ? parseAnio(body.anio)
+        : null;
+    if (body.anio != null && body.anio !== "" && anio == null) {
+      return jsonError("Año inválido", 400);
+    }
     const etiqueta1 = String(body.etiqueta_1 ?? "Bud").trim() || "Bud";
     const etiqueta2 = String(body.etiqueta_2 ?? "Act").trim() || "Act";
     const columnasDobles = Array.isArray(body.columnas_dobles)
@@ -45,13 +53,15 @@ export async function PUT(request, { params }) {
         : {};
 
     const [filaRows] = await conn.query(
-      `SELECT id_fila FROM formato_filas WHERE id_fila = ? AND id_formato = ?`,
+      `SELECT id_fila, anio FROM formato_filas WHERE id_fila = ? AND id_formato = ?`,
       [idFila, idFormato],
     );
 
     if (!filaRows.length) {
       return jsonError("Fila no encontrada", 404);
     }
+
+    const anioFinal = anio ?? parseAnio(filaRows[0].anio) ?? anioActual();
 
     const [columnas] = await conn.query(
       `SELECT id_columna FROM formato_columnas WHERE id_formato = ?`,
@@ -62,10 +72,11 @@ export async function PUT(request, { params }) {
 
     await conn.query(
       `UPDATE formato_filas
-       SET doble_respuesta = ?, etiqueta_1 = ?, etiqueta_2 = ?,
+       SET anio = ?, doble_respuesta = ?, etiqueta_1 = ?, etiqueta_2 = ?,
            columnas_dobles = ?, reglas_dobles = ?, reglas_fila = ?
        WHERE id_fila = ? AND id_formato = ?`,
       [
+        anioFinal,
         columnasDobles.length ? 1 : 0,
         etiqueta1,
         etiqueta2,
@@ -89,9 +100,10 @@ export async function PUT(request, { params }) {
 
     await conn.commit();
 
-    const filas = await fetchFormatoFilas(idFormato, conn);
+    const filas = await fetchFormatoFilas(idFormato, conn, { anio: anioFinal });
     const fila = filas.find((f) => f.id_fila === idFila) || {
       id_fila: idFila,
+      anio: anioFinal,
       celdas: {},
     };
 

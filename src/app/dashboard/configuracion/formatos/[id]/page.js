@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import ColumnasConReglasEditor from "@/app/components/ColumnasConReglasEditor";
 import DashboardShell from "@/app/components/DashboardShell";
@@ -52,6 +53,8 @@ export default function EditarFormatoPage() {
 
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [idCategoria, setIdCategoria] = useState("");
+  const [categorias, setCategorias] = useState([]);
   const [columnas, setColumnas] = useState([emptyColumna()]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,12 +63,20 @@ export default function EditarFormatoPage() {
 
   useEffect(() => {
     async function load() {
-      const res = await fetch(`/api/formatos/${id}`);
-      const data = await res.json();
+      const [resFormato, resCategorias] = await Promise.all([
+        fetch(`/api/formatos/${id}`),
+        fetch("/api/categorias"),
+      ]);
+      const data = await resFormato.json();
+      const cats = await resCategorias.json();
+      setCategorias(cats.success ? cats.data : []);
 
       if (data.success) {
         setNombre(data.data.nombre);
         setDescripcion(data.data.descripcion || "");
+        setIdCategoria(
+          data.data.id_categoria ? String(data.data.id_categoria) : "",
+        );
         setColumnas(
           data.data.columnas?.length
             ? mapColumnasParaEditor(data.data.columnas)
@@ -92,7 +103,12 @@ export default function EditarFormatoPage() {
     const res = await fetch(`/api/formatos/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nombre, descripcion, columnas }),
+      body: JSON.stringify({
+        nombre,
+        descripcion,
+        id_categoria: idCategoria || null,
+        columnas,
+      }),
     });
 
     const data = await res.json();
@@ -149,6 +165,32 @@ export default function EditarFormatoPage() {
               onChange={(e) => setNombre(e.target.value)}
               required
             />
+          </div>
+
+          <div className={styles.field}>
+            <label htmlFor="formato-categoria">Categoría</label>
+            <select
+              id="formato-categoria"
+              className={styles.select}
+              value={idCategoria}
+              onChange={(e) => setIdCategoria(e.target.value)}
+            >
+              <option value="">Sin categoría</option>
+              {categorias.map((cat) => (
+                <option key={cat.id_categoria} value={cat.id_categoria}>
+                  {cat.nombre}
+                </option>
+              ))}
+            </select>
+            {!categorias.length ? (
+              <p className={styles.reglasHint}>
+                No hay categorías.{" "}
+                <Link href="/dashboard/configuracion/categorias">
+                  Créalas aquí
+                </Link>
+                .
+              </p>
+            ) : null}
           </div>
 
           <div className={styles.field}>

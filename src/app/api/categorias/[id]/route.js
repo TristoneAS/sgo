@@ -70,6 +70,16 @@ export async function DELETE(_request, { params }) {
       [id],
     );
 
+    try {
+      await sgoDb.query(
+        `UPDATE formatos SET id_categoria = NULL
+         WHERE id_categoria = ? AND estado = 'activo'`,
+        [id],
+      );
+    } catch {
+      /* columna puede no existir aún en BD antiguas */
+    }
+
     return jsonOk(null, "Categoría eliminada");
   } catch (error) {
     console.error("Error al eliminar categoría:", error);

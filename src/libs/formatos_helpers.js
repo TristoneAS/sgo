@@ -1,11 +1,18 @@
 import { sgoDb } from "@/libs/sgo_db";
 import { parseReglasDobles, parseReglasFila } from "@/libs/conditional_rules";
 import {
+  anioActual,
+  buildAnioOptions,
+  parseAnio,
+} from "@/libs/formato_anio";
+import {
   isColumnaYtd,
   MAX_COLUMNAS_PROMEDIO,
   normalizePromedioIndices,
   parsePromedioColumnas,
 } from "@/libs/ytd_promedio";
+
+export { anioActual, buildAnioOptions, parseAnio };
 
 export async function fetchFormatoColumnas(idFormato, conn = sgoDb) {
   const [rows] = await conn.query(
@@ -49,14 +56,32 @@ export async function fetchFormatoColumnas(idFormato, conn = sgoDb) {
   }));
 }
 
-export async function fetchFormatoFilas(idFormato, conn = sgoDb) {
-  const [filas] = await conn.query(
-    `SELECT id_fila, id_formato, creado_por, doble_respuesta, etiqueta_1, etiqueta_2,
-            columnas_dobles, reglas_dobles, reglas_fila, created_at
+export async function fetchFormatoAnios(idFormato, conn = sgoDb) {
+  const [rows] = await conn.query(
+    `SELECT DISTINCT anio
      FROM formato_filas
      WHERE id_formato = ?
-     ORDER BY id_fila ASC`,
+     ORDER BY anio DESC`,
     [idFormato],
+  );
+  return rows.map((r) => Number(r.anio)).filter((n) => !Number.isNaN(n));
+}
+
+export async function fetchFormatoFilas(idFormato, conn = sgoDb, { anio } = {}) {
+  const params = [idFormato];
+  let where = "WHERE id_formato = ?";
+  if (anio != null) {
+    where += " AND anio = ?";
+    params.push(anio);
+  }
+
+  const [filas] = await conn.query(
+    `SELECT id_fila, id_formato, anio, creado_por, doble_respuesta, etiqueta_1, etiqueta_2,
+            columnas_dobles, reglas_dobles, reglas_fila, created_at
+     FROM formato_filas
+     ${where}
+     ORDER BY id_fila ASC`,
+    params,
   );
 
   if (!filas.length) {
@@ -337,19 +362,50 @@ async function cleanupFilaRefsTrasSyncColumnas(conn, idFormato, keptIds) {
   }
 }
 
-export async function fetchFormatoCompleto(idFormato, conn = sgoDb) {
+export async function fetchFormatoCompleto(idFormato, conn = sgoDb, { anio } = {}) {
   const [formatos] = await conn.query(
-    `SELECT id_formato, nombre, descripcion, estado, creado_por, created_at, updated_at
-     FROM formatos
-     WHERE id_formato = ? AND estado = 'activo'`,
+    `SELECT f.id_formato, f.nombre, f.descripcion, f.id_categoria, f.estado,
+            f.creado_por, f.created_at, f.updated_at,
+            c.nombre AS categoria_nombre
+     FROM formatos f
+     LEFT JOIN categorias c
+       ON c.id_categoria = f.id_categoria AND c.estado = 'activo'
+     WHERE f.id_formato = ? AND f.estado = 'activo'`,
     [idFormato],
   );
 
   if (!formatos.length) return null;
 
   const formato = formatos[0];
-  const columnas = await fetchFormatoColumnas(idFormato, conn);
-  const filas = await fetchFormatoFilas(idFormato, conn);
+  const [columnas, filas, aniosDisponibles] = await Promise.all([
+    fetchFormatoColumnas(idFormato, conn),
+    fetchFormatoFilas(idFormato, conn, { anio }),
+    fetchFormatoAnios(idFormato, conn),
+  ]);
 
-  return { ...formato, columnas, filas };
+  return {
+    ...formato,
+    columnas,
+    filas,
+    anio_consulta: anio ?? null,
+    anios_disponibles: aniosDisponibles,
+  };
+}
+
+export function parseIdCategoria(raw) {
+  if (raw == null || raw === "") return null;
+  const id = Number(raw);
+  if (Number.isNaN(id) || id <= 0) return null;
+  return id;
+}
+
+export async function resolveIdCategoriaActiva(conn, idCategoria) {
+  if (idCategoria == null) return null;
+  const [rows] = await conn.query(
+    `SELECT id_categoria FROM categorias
+     WHERE id_categoria = ? AND estado = 'activo'
+     LIMIT 1`,
+    [idCategoria],
+  );
+  return rows.length ? idCategoria : null;
 }

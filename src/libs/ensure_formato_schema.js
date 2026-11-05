@@ -1,6 +1,9 @@
 import { sgoDb } from "@/libs/sgo_db";
 
+/** Subir al agregar migraciones nuevas para forzar re-chequeo en el mismo proceso. */
+const SCHEMA_VERSION = 2;
 let ensurePromise = null;
+let ensuredVersion = 0;
 
 async function tableColumns(conn, tableName) {
   const [cols] = await conn.query(
@@ -28,10 +31,33 @@ async function tableExists(conn, tableName) {
  * Usa TEXT en lugar de JSON para compatibilidad con MySQL antiguos.
  */
 export async function ensureFormatoSchema(conn = sgoDb) {
+  if (ensuredVersion !== SCHEMA_VERSION) {
+    ensurePromise = null;
+  }
+
   if (!ensurePromise) {
     ensurePromise = (async () => {
       const ownConn = conn === sgoDb ? await sgoDb.getConnection() : conn;
       try {
+        const formatoCols = await tableColumns(ownConn, "formatos");
+        if (!formatoCols.has("id_categoria")) {
+          await ownConn.query(`
+            ALTER TABLE formatos
+            ADD COLUMN id_categoria INT NULL
+            AFTER descripcion
+          `);
+          try {
+            await ownConn.query(`
+              ALTER TABLE formatos
+              ADD CONSTRAINT fk_formatos_categoria
+              FOREIGN KEY (id_categoria) REFERENCES categorias (id_categoria)
+              ON DELETE SET NULL
+            `);
+          } catch {
+            /* FK puede fallar si categorias aún no existe */
+          }
+        }
+
         const colCols = await tableColumns(ownConn, "formato_columnas");
         if (!colCols.has("promedio_columnas")) {
           await ownConn.query(`
@@ -42,6 +68,31 @@ export async function ensureFormatoSchema(conn = sgoDb) {
         }
 
         const filaCols = await tableColumns(ownConn, "formato_filas");
+        if (!filaCols.has("anio")) {
+          const anioDefault = new Date().getFullYear();
+          await ownConn.query(`
+            ALTER TABLE formato_filas
+            ADD COLUMN anio SMALLINT NOT NULL DEFAULT ${anioDefault}
+            AFTER id_formato
+          `);
+          try {
+            await ownConn.query(`
+              UPDATE formato_filas
+              SET anio = YEAR(created_at)
+              WHERE created_at IS NOT NULL
+            `);
+          } catch {
+            /* ignore */
+          }
+          try {
+            await ownConn.query(`
+              ALTER TABLE formato_filas
+              ADD KEY idx_filas_formato_anio (id_formato, anio)
+            `);
+          } catch {
+            /* índice puede existir */
+          }
+        }
         if (!filaCols.has("doble_respuesta")) {
           await ownConn.query(`
             ALTER TABLE formato_filas
@@ -119,11 +170,13 @@ export async function ensureFormatoSchema(conn = sgoDb) {
             `);
           }
         }
+        ensuredVersion = SCHEMA_VERSION;
       } finally {
         if (conn === sgoDb) ownConn.release();
       }
     })().catch((err) => {
       ensurePromise = null;
+      ensuredVersion = 0;
       throw err;
     });
   }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { anioActual, buildAnioOptions } from "@/libs/formato_anio";
 import DashboardShell from "@/app/components/DashboardShell";
 import PreguntasCamposEditor, {
   makeToggleColumnaDoble,
@@ -213,7 +214,10 @@ function useCamposState() {
 
 export default function FormatosPreguntasForm() {
   const [formatos, setFormatos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [filtroCategoria, setFiltroCategoria] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [anio, setAnio] = useState(() => anioActual());
   const [formato, setFormato] = useState(null);
   const [vistaIndex, setVistaIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -226,14 +230,23 @@ export default function FormatosPreguntasForm() {
   const edit = useCamposState();
 
   const loadFormatos = useCallback(async () => {
-    const res = await fetch("/api/formatos");
-    const data = await res.json();
-    setFormatos(data.success ? data.data : []);
+    const [resFormatos, resCategorias] = await Promise.all([
+      fetch("/api/formatos"),
+      fetch("/api/categorias"),
+    ]);
+    const dataFormatos = await resFormatos.json();
+    const dataCategorias = await resCategorias.json();
+    setFormatos(dataFormatos.success ? dataFormatos.data : []);
+    setCategorias(dataCategorias.success ? dataCategorias.data : []);
   }, []);
 
   const loadFormato = useCallback(
     async (id, options = {}) => {
-      const { resetFormulario = true, keepVista = false } = options;
+      const {
+        resetFormulario = true,
+        keepVista = false,
+        anioConsulta = anio,
+      } = options;
 
       if (!id) {
         setFormato(null);
@@ -245,7 +258,9 @@ export default function FormatosPreguntasForm() {
       }
 
       setLoading(true);
-      const res = await fetch(`/api/formatos/${id}`);
+      const res = await fetch(
+        `/api/formatos/${id}?anio=${encodeURIComponent(anioConsulta)}`,
+      );
       const data = await res.json();
 
       if (data.success) {
@@ -277,17 +292,40 @@ export default function FormatosPreguntasForm() {
     },
     // create.reset is stable enough for our usage; avoid stale closure on columnas
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [anio],
   );
 
   useEffect(() => {
     loadFormatos().finally(() => setLoading(false));
   }, [loadFormatos]);
 
+  const formatosFiltrados = useMemo(() => {
+    if (!filtroCategoria) return formatos;
+    if (filtroCategoria === "sin") {
+      return formatos.filter((f) => !f.id_categoria);
+    }
+    const id = Number(filtroCategoria);
+    return formatos.filter((f) => Number(f.id_categoria) === id);
+  }, [formatos, filtroCategoria]);
+
   useEffect(() => {
-    if (selectedId) loadFormato(selectedId);
+    if (
+      selectedId &&
+      !formatosFiltrados.some((f) => String(f.id_formato) === String(selectedId))
+    ) {
+      setSelectedId("");
+    }
+  }, [formatosFiltrados, selectedId]);
+
+  useEffect(() => {
+    if (selectedId) loadFormato(selectedId, { anioConsulta: anio });
     else loadFormato("");
-  }, [selectedId, loadFormato]);
+  }, [selectedId, anio, loadFormato]);
+
+  const anioOptions = useMemo(
+    () => buildAnioOptions(formato?.anios_disponibles || [], anio),
+    [formato?.anios_disponibles, anio],
+  );
 
   useEffect(() => {
     if (!editModalOpen) return undefined;
@@ -363,6 +401,7 @@ export default function FormatosPreguntasForm() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         creado_por: getUsuario(),
+        anio,
         etiqueta_1: campos.etiqueta1,
         etiqueta_2: campos.etiqueta2,
         columnas_dobles: columnasDoblesList,
@@ -393,6 +432,7 @@ export default function FormatosPreguntasForm() {
       const next = await loadFormato(String(formato.id_formato), {
         resetFormulario: !idFila,
         keepVista: Boolean(idFila),
+        anioConsulta: anio,
       });
       if (!idFila && next?.filas?.length) {
         setVistaIndex(next.filas.length - 1);
@@ -478,13 +518,40 @@ export default function FormatosPreguntasForm() {
       <div className={styles.toolbar}>
         <select
           className={styles.select}
+          value={filtroCategoria}
+          onChange={(e) => setFiltroCategoria(e.target.value)}
+          aria-label="Filtrar por categoría"
+        >
+          <option value="">Todas las categorías</option>
+          <option value="sin">Sin categoría</option>
+          {categorias.map((c) => (
+            <option key={c.id_categoria} value={c.id_categoria}>
+              {c.nombre}
+            </option>
+          ))}
+        </select>
+        <select
+          className={styles.select}
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
         >
           <option value="">Selecciona un formato...</option>
-          {formatos.map((f) => (
+          {formatosFiltrados.map((f) => (
             <option key={f.id_formato} value={f.id_formato}>
               {f.nombre}
+            </option>
+          ))}
+        </select>
+        <select
+          className={styles.select}
+          value={anio}
+          onChange={(e) => setAnio(Number(e.target.value))}
+          aria-label="Año"
+          title="Año de las respuestas"
+        >
+          {anioOptions.map((y) => (
+            <option key={y} value={y}>
+              Año {y}
             </option>
           ))}
         </select>
@@ -497,7 +564,9 @@ export default function FormatosPreguntasForm() {
           Selecciona un formato para comenzar a responder.
         </div>
       ) : !formato ? (
-        <div className={styles.emptyState}>Formato no encontrado.</div>
+        <div className={styles.emptyState}>
+          Formato no encontrado.
+        </div>
       ) : (
         <div className={styles.preguntasLayout}>
           <form className={styles.preguntasForm} onSubmit={handleCreateSubmit}>

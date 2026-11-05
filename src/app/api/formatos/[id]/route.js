@@ -1,13 +1,16 @@
 import { jsonError, jsonOk, parseId } from "@/libs/api_helpers";
 import { normalizeColumnasPayload } from "@/libs/conditional_rules";
 import { ensureFormatoSchema } from "@/libs/ensure_formato_schema";
+import { parseAnio } from "@/libs/formato_anio";
 import {
   fetchFormatoCompleto,
+  parseIdCategoria,
+  resolveIdCategoriaActiva,
   syncColumnasConReglas,
 } from "@/libs/formatos_helpers";
 import { sgoDb } from "@/libs/sgo_db";
 
-export async function GET(_request, { params }) {
+export async function GET(request, { params }) {
   try {
     const resolved = await params;
     const idFormato = parseId(resolved, "id");
@@ -16,8 +19,17 @@ export async function GET(_request, { params }) {
       return jsonError("ID de formato inválido", 400);
     }
 
+    const anioParam = new URL(request.url).searchParams.get("anio");
+    let anio;
+    if (anioParam != null && anioParam !== "") {
+      anio = parseAnio(anioParam);
+      if (anio == null) {
+        return jsonError("Año inválido", 400);
+      }
+    }
+
     await ensureFormatoSchema();
-    const formato = await fetchFormatoCompleto(idFormato);
+    const formato = await fetchFormatoCompleto(idFormato, sgoDb, { anio });
     if (!formato) {
       return jsonError("Formato no encontrado", 404);
     }
@@ -46,6 +58,7 @@ export async function PUT(request, { params }) {
     const nombre = String(body.nombre ?? "").trim();
     const descripcion = String(body.descripcion ?? "").trim();
     const columnas = normalizeColumnasPayload(body.columnas);
+    const idCategoriaRaw = parseIdCategoria(body.id_categoria);
 
     if (!nombre) {
       return jsonError("El nombre del formato es requerido", 400);
@@ -53,6 +66,11 @@ export async function PUT(request, { params }) {
 
     if (!columnas.length) {
       return jsonError("Agregue al menos una columna con título", 400);
+    }
+
+    const idCategoria = await resolveIdCategoriaActiva(conn, idCategoriaRaw);
+    if (idCategoriaRaw != null && idCategoria == null) {
+      return jsonError("La categoría seleccionada no es válida", 400);
     }
 
     const [existing] = await conn.query(
@@ -67,8 +85,10 @@ export async function PUT(request, { params }) {
     await conn.beginTransaction();
 
     await conn.query(
-      `UPDATE formatos SET nombre = ?, descripcion = ? WHERE id_formato = ?`,
-      [nombre, descripcion || null, idFormato],
+      `UPDATE formatos
+       SET nombre = ?, descripcion = ?, id_categoria = ?
+       WHERE id_formato = ?`,
+      [nombre, descripcion || null, idCategoria, idFormato],
     );
 
     await syncColumnasConReglas(conn, idFormato, columnas);

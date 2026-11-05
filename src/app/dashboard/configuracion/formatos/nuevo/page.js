@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ColumnasConReglasEditor from "@/app/components/ColumnasConReglasEditor";
 import DashboardShell from "@/app/components/DashboardShell";
@@ -11,9 +12,20 @@ export default function NuevoFormatoPage() {
   const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [idCategoria, setIdCategoria] = useState("");
+  const [categorias, setCategorias] = useState([]);
   const [columnas, setColumnas] = useState([emptyColumna(), emptyColumna()]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
+
+  useEffect(() => {
+    async function loadCategorias() {
+      const res = await fetch("/api/categorias");
+      const data = await res.json();
+      setCategorias(data.success ? data.data : []);
+    }
+    loadCategorias();
+  }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -26,6 +38,7 @@ export default function NuevoFormatoPage() {
       body: JSON.stringify({
         nombre,
         descripcion,
+        id_categoria: idCategoria || null,
         creado_por: localStorage.getItem("usuario") || "",
         columnas,
       }),
@@ -48,7 +61,7 @@ export default function NuevoFormatoPage() {
   return (
     <DashboardShell
       title="Crear Formatos"
-      subtitle="Define columnas y reglas de color"
+      subtitle="Define columnas, reglas de color y categoría"
     >
       <div className={styles.card}>
         {message.text ? (
@@ -67,6 +80,32 @@ export default function NuevoFormatoPage() {
               placeholder="Ej. Reporte semanal"
               required
             />
+          </div>
+
+          <div className={styles.field}>
+            <label htmlFor="formato-categoria">Categoría</label>
+            <select
+              id="formato-categoria"
+              className={styles.select}
+              value={idCategoria}
+              onChange={(e) => setIdCategoria(e.target.value)}
+            >
+              <option value="">Sin categoría</option>
+              {categorias.map((cat) => (
+                <option key={cat.id_categoria} value={cat.id_categoria}>
+                  {cat.nombre}
+                </option>
+              ))}
+            </select>
+            {!categorias.length ? (
+              <p className={styles.reglasHint}>
+                No hay categorías.{" "}
+                <Link href="/dashboard/configuracion/categorias">
+                  Créalas aquí
+                </Link>
+                .
+              </p>
+            ) : null}
           </div>
 
           <div className={styles.field}>
